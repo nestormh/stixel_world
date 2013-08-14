@@ -1,4 +1,4 @@
-add_executable(testStixelWorld 
+add_executable(testStixelWorld rectification.cpp 
     main.cpp
 )
   
