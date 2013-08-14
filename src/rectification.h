@@ -43,6 +43,12 @@ public:
     bool doRectification(const cv::Mat & img1, const cv::Mat & img2, 
                          cv::Mat & rectified1, cv::Mat & rectified2, const uint32_t method = RECTIFICATION_LINEAR);
     
+    cv::Mat getIntrinsicCoeffs(const uint32_t & cameraId) { return m_intrinsicCoeffs[cameraId]; }
+    cv::Mat getDistCoeffs(const uint32_t & cameraId) { return m_distCoeffs[cameraId]; }
+    cv::Mat getR() { return m_R; }
+    cv::Mat getT() { return m_t; }
+    uint32_t getDisparityOffsetX();
+    
 private:
     bool doRectificationLinear(const cv::Mat & img1, const cv::Mat & img2, 
                                cv::Mat & rectified1, cv::Mat & rectified2);

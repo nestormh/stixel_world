@@ -22,6 +22,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/concept_check.hpp>
 #include "rectification.h"
+#include "groundestimator.h"
 
 using namespace std;
 using namespace stixel_world;
@@ -53,6 +54,7 @@ int main(int argc, char * argv[]) {
     Rectification rectificator;
     rectificator.readParamsFromFile(calibrationPath1.string(), 0, false);
     rectificator.readParamsFromFile(calibrationPath2.string(), 1, true);
+    GroundEstimator groundEstimator(rectificator);
     
     cv::namedWindow("img1");
     cv::namedWindow("img2");
@@ -75,10 +77,12 @@ int main(int argc, char * argv[]) {
         cout << img1Path.string() << endl;
         cout << img2Path.string() << endl;
         
-        cv::Mat distortedImg1 = cv::imread(img1Path.string(), 0);
-        cv::Mat distortedImg2 = cv::imread(img2Path.string(), 0);
+        cv::Mat distortedImg1 = cv::imread(img1Path.string(), 1);
+        cv::Mat distortedImg2 = cv::imread(img2Path.string(), 1);
         
         rectificator.doRectification(distortedImg1, distortedImg2, img1, img2);
+        groundEstimator.setImagePair(img1, img2);
+        groundEstimator.compute();
         
         cv::imshow("img1", img1);
         cv::imshow("img2", img2);

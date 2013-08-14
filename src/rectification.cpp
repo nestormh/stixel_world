@@ -115,16 +115,26 @@ bool Rectification::doRectificationLinear(const cv::Mat& img1, const cv::Mat& im
             (! m_R.empty()) && (! m_t.empty()));
     
     cv::Mat R1, R2, P1, P2, Q;
+    cv::Rect roi1, roi2;
     cv::stereoRectify(m_intrinsicCoeffs[0], m_distCoeffs[0], m_intrinsicCoeffs[1], m_distCoeffs[1], img1.size(), 
-                    m_R, m_t, R1, R2, P1, P2, Q, CV_CALIB_ZERO_DISPARITY);
+                    m_R, m_t, R1, R2, P1, P2, Q, CV_CALIB_ZERO_DISPARITY, -1, cv::Size(), &roi1, & roi2);
     
     cv::Mat mapX1, mapY1, mapX2, mapY2;
     cv::initUndistortRectifyMap(m_intrinsicCoeffs[0], m_distCoeffs[0], R1, P1, img1.size(), 
                                 CV_32FC1, mapX1,  mapY1);
     cv::initUndistortRectifyMap(m_intrinsicCoeffs[1], m_distCoeffs[1], R2, P2, img1.size(), 
                                 CV_32FC1, mapX2,  mapY2);
-    cv::remap(img1, rectified1, mapX1, mapY1, cv::INTER_LINEAR);
-    cv::remap(img2, rectified2, mapX2, mapY2, cv::INTER_LINEAR);
+    cv::remap(img1, rectified1, mapX1, mapY1, cv::INTER_NEAREST);
+    cv::remap(img2, rectified2, mapX2, mapY2, cv::INTER_NEAREST);
+    
+    rectified1 = rectified1(roi1);
+    rectified2 = rectified2(roi2);
     
     return true;
+}
+
+uint32_t Rectification::getDisparityOffsetX()
+{
+    // 0, 3
+    return m_intrinsicCoeffs[0].at<double>(0,3) - m_intrinsicCoeffs[1].at<double>(0,3);
 }

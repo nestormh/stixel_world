@@ -1,4 +1,6 @@
-add_executable(testStixelWorld groundestimator.cpp rectification.cpp 
+add_executable(testStixelWorld 
+    groundestimator.cpp 
+    rectification.cpp 
     main.cpp
 )
   

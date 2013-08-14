@@ -7,7 +7,7 @@ project(PolarCalibration)
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frounding-math")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -unroll-loops -march=native")
 # set(CMAKE_LINK_LIBRARY_FLAG "${CMAKE_LINK_LIBRARY_FLAG} -fopenmp")
 
 # set (CMAKE_MODULE_PATH "/usr/local/share/pcl-1.6" ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
