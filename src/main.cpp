@@ -78,7 +78,6 @@ int main(int argc, char * argv[]) {
         cv::Mat distortedImg1 = cv::imread(img1Path.string(), 0);
         cv::Mat distortedImg2 = cv::imread(img2Path.string(), 0);
         
-//         rectificator.doUndistortion(distortedImg1, distortedImg2, img1, img2);
         rectificator.doRectification(distortedImg1, distortedImg2, img1, img2);
         
         cv::imshow("img1", img1);
