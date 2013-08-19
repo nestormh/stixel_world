@@ -48,6 +48,11 @@ public:
     cv::Mat getR() { return m_R; }
     cv::Mat getT() { return m_t; }
     uint32_t getDisparityOffsetX();
+    double getFocalLengthX(const uint32_t & whichCamera) { return m_intrinsicCoeffs[whichCamera].at<double>(0,0); }
+    double getFocalLengthY(const uint32_t & whichCamera) { return m_intrinsicCoeffs[whichCamera].at<double>(1,1); }
+    double getFocalCenterX(const uint32_t & whichCamera) { return m_intrinsicCoeffs[whichCamera].at<double>(0,2); }
+    double getFocalCenterY(const uint32_t & whichCamera) { return m_intrinsicCoeffs[whichCamera].at<double>(1,2); }
+    double getBaseline() { return m_t.at<double>(0); }
     
 private:
     bool doRectificationLinear(const cv::Mat & img1, const cv::Mat & img2, 

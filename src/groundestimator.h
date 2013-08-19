@@ -19,7 +19,13 @@
 
 #ifndef GROUNDESTIMATOR_H
 #define GROUNDESTIMATOR_H
+
 #include <opencv2/opencv.hpp>
+#include<Eigen/Geometry>
+#include <boost/shared_ptr.hpp>
+
+#include "doppia/GroundPlane.hpp"
+#include "doppia/IrlsLinesDetector.hpp"
 #include "rectification.h"
 
 #define MAX_POINTS_IN_ROW 20
@@ -28,7 +34,8 @@
 namespace stixel_world {
 class GroundEstimator
 {
-
+    
+    
 public:
     GroundEstimator(const Rectification & rectification);
     virtual ~GroundEstimator();
@@ -39,13 +46,16 @@ public:
     void setYStride(const double & yStride) { m_yStride = yStride; }
     void setMaxDisparity(const uint32_t & maxDisparity) { m_maxDisparity = maxDisparity; }
 private:
+    typedef Eigen::ParametrizedLine<float, 2> line_t;
     
     void computeVDisparityData();
     void computeVDisparityRow(const uint32_t & rowIdx);
     uint16_t sad_cost_uint16(const cv::Vec3b &pixel_a, const cv::Vec3b  &pixel_b);
     void selectPointsAndWeights(const uint32_t & rowIdx, const uint16_t & minCost);
-    void setPointsWeights(vector<uint32_t> & pointWeights);
+    void setPointsWeights(Eigen::VectorXf & pointWeights);
     void estimateGroundPlane();
+    bool findGroundLine(line_t &groundLine);
+    line_t groundPlaneToVDisparityLine(const doppia::GroundPlane &groundPlane);
     
     cv::Mat m_left, m_right, m_disparity;
     bool m_justHalfImage;
@@ -54,6 +64,12 @@ private:
     Rectification m_rectification;
     vector<cv::Point2f> m_selectedPoints;
     vector<double> m_rowWeights;
+    Eigen::VectorXf m_pointWeights;
+    line_t m_vDisparityGroundLine;
+    
+    double m_stereoAlpha, m_stereoV0;
+    doppia::GroundPlane m_estimatedGroundPlane;
+    boost::shared_ptr<doppia::IrlsLinesDetector> m_pIrlsLinesDetector;
 };
 }
 

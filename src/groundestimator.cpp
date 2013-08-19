@@ -26,6 +26,19 @@ GroundEstimator::GroundEstimator(const Rectification & rectification) : m_rectif
     m_justHalfImage = true;
     m_yStride = 1;
     m_maxDisparity = 128;
+    
+    // alpha and v0 as defined in section II of the V-disparity paper of Labayrade, Aubert and Tarel 2002.
+    m_stereoAlpha = (
+                    m_rectification.getFocalLengthX(0) +
+                    m_rectification.getFocalLengthY(0) +
+                    m_rectification.getFocalLengthX(1) +
+                    m_rectification.getFocalLengthY(1)
+                    ) / 4.0;
+            
+    m_stereoV0 = (
+                m_rectification.getFocalCenterY(0) +
+                m_rectification.getFocalCenterY(1)
+                 ) / 2.0;
 }
 
 GroundEstimator::~GroundEstimator()
@@ -59,8 +72,7 @@ bool GroundEstimator::compute()
     // compute v_disparity --
     computeVDisparityData();
     
-    vector<uint32_t> pointWeights;
-    setPointsWeights(pointWeights);
+    setPointsWeights(m_pointWeights);
     // compute line --
     estimateGroundPlane();
 //     
@@ -183,7 +195,7 @@ inline void GroundEstimator::selectPointsAndWeights(const uint32_t& rowIdx, cons
     return;
 }
 
-void GroundEstimator::setPointsWeights(vector<uint32_t> & pointWeights)
+void GroundEstimator::setPointsWeights(Eigen::VectorXf & pointWeights)
 {
     pointWeights.resize(m_selectedPoints.size());
     
@@ -196,5 +208,186 @@ void GroundEstimator::setPointsWeights(vector<uint32_t> & pointWeights)
 
 void GroundEstimator::estimateGroundPlane()
 {
-    // TODO
+    const bool found_ground_plane = findGroundLine(m_vDisparityGroundLine);
+    
+    /*const float weight = std::max(0.0f, 1.0f - get_confidence());
+    
+    const float minimum_weight = rejection_threshold;
+    //const float minimum_weight = 0.0015;
+    
+    // retrieve ground plane parameters --
+    if((found_ground_plane == true) and (weight >  minimum_weight))
+    {
+        set_ground_plane_estimate(
+            v_disparity_line_to_ground_plane(v_disparity_ground_line), weight);
+        
+        const bool print_estimated_plane = false;
+        if(print_estimated_plane)
+        {
+            log_debug() << "Found a ground plane with " <<
+            "heigth == " << estimated_ground_plane.get_height() << " [meters]"
+            " and pitch == " << estimated_ground_plane.get_pitch() * 180 / M_PI << " [degrees]" <<
+            std::endl;
+            log_debug() << "Ground plane comes from line with " <<
+            "origin == " << v_disparity_ground_line.origin()(0) << " [pixels]"
+            " and direction == " << v_disparity_ground_line.direction()(0) << " [-]" <<
+            std::endl;
+        }
+    }
+    else
+    {
+        num_ground_plane_estimation_failures += 1;
+        
+        // in case this happened during the first call
+        // we set the v_disparity_ground_line using the current ground plane estimate
+        v_disparity_ground_line = ground_plane_to_v_disparity_line( get_ground_plane() );
+        
+        static int num_ground_warnings = 0;
+        //const int max_num_ground_warnings = 1000;
+        //const int max_num_ground_warnings = 50;
+        const int max_num_ground_warnings = 25;
+        
+        if(num_ground_warnings < max_num_ground_warnings)
+        {
+            log_warning() << "Did not find a ground plane, keeping previous estimate." << std::endl;
+            num_ground_warnings += 1;
+        }
+        else if(num_ground_warnings == max_num_ground_warnings)
+        {
+            log_warning() << "Warned too many times about problems finding ground plane, going silent." << std::endl;
+            num_ground_warnings += 1;
+        }
+        else
+        {
+            // we do nothing
+        }
+        
+        const float weight = 1.0;
+        // we keep previous estimate
+        set_ground_plane_estimate(estimated_ground_plane, weight);
+        
+        
+        //        const bool save_failures_v_disparity_image = false;
+        //        if(save_failures_v_disparity_image)
+        //        {
+        //            const std::string filename = boost::str(
+        //                        boost::format("failure_v_disparity_%i.png") % num_ground_plane_estimation_failures );
+        //            log_info() << "Created image " << filename << std::endl;
+        //            boost::gil::png_write_view(filename, v_disparity_image_view);
+        //        }
+    }
+    
+    return;*/
+}
+
+bool GroundEstimator::findGroundLine(line_t &groundLine) {
+    // find the most likely plane (line) in the v-disparity image ---
+    vector<line_t> foundLines;
+    bool foundGroundPlane = false;
+    
+    // we correct the origin of our estimate lines
+    // since we computed them using the lower half of the image
+    const int originOffset = m_left.rows;
+    
+    const line_t linePrior = groundPlaneToVDisparityLine(m_estimatedGroundPlane);
+    
+    line_t linePriorWithOffset = linePrior;
+    linePriorWithOffset.origin()(0) -= originOffset;
+    cout << "m_estimatedGroundPlane " << m_estimatedGroundPlane.get_pitch() << ", " << m_estimatedGroundPlane.get_height() << endl;
+    cout << "linePrior " << linePrior.direction() << endl;
+    
+    m_pIrlsLinesDetector->set_initial_estimate(linePriorWithOffset);
+    
+    exit(0);
+    (*m_pIrlsLinesDetector)(m_selectedPoints, m_pointWeights, foundLines);
+    
+    printf("irls_lines_detector_p found %zi lines\n", foundLines.size());
+    
+    /*BOOST_FOREACH(line_t &line, found_lines)
+    {
+        line.origin()(0) += origin_offset;
+    }
+    
+    // given two bounding lines we verify the x=0 line and the y=max_y line
+    // this checks bound quite well the desired ground line
+    
+    const float direction_fraction = 1.5; // FIXME hardcoded value
+    const float max_line_direction = prior_max_v_disparity_line.direction()(0)*direction_fraction,
+    min_line_direction = prior_min_v_disparity_line.direction()(0)/direction_fraction;
+    
+    const float max_line_y0 = prior_max_v_disparity_line.origin()(0),
+    min_line_y0 = prior_min_v_disparity_line.origin()(0);
+    
+    const float min_y0 = max_line_y0, max_y0 = min_line_y0;
+    
+    const float y_intercept = input_left_view.height();
+    const float max_x_intercept = (y_intercept - max_line_y0) / max_line_direction,
+    min_x_intercept = (y_intercept - min_line_y0) / min_line_direction;
+    
+    assert(min_y0 < max_y0);
+    assert(min_x_intercept < max_x_intercept);
+    
+    BOOST_FOREACH(line_t t_ground_line, found_lines)
+    {
+        const float t_y0 = t_ground_line.origin()(0);
+        const float t_direction =  t_ground_line.direction()(0);
+        const float t_x_intercept = (y_intercept - t_y0) / t_direction;
+        
+        const bool print_xy_check = false;
+        if(print_xy_check)
+        {
+            printf("prior origin == %.3f, direction == %.3f\n",
+                   line_prior.origin()(0), line_prior.direction()(0));
+            
+            printf("line origin == %.3f, direction == %.3f\n",
+                   t_ground_line.origin()(0), t_ground_line.direction()(0));
+            
+            printf("max_y0 == %.3f, t_y0 == %.3f, min_y0 = %.3f\n",
+                   max_y0, t_y0, min_y0);
+            
+            printf("max_x_intercept == %.3f, t_x_intercept == %.3f, min_x_intercept = %.3f\n",
+                   max_x_intercept, t_x_intercept, min_x_intercept);
+            
+            printf("max_line_direction == %.3f, t_direction == %.3f, min_line_direction = %.3f\n",
+                   max_line_direction, t_direction, min_line_direction);
+        }
+        
+        if(t_y0 <= max_y0 and t_y0 >= min_y0 and
+            t_x_intercept <= max_x_intercept and t_x_intercept >= min_x_intercept and
+            t_direction <= max_line_direction and t_direction >= min_line_direction )
+        {
+            ground_line = t_ground_line;
+            found_ground_plane = true;
+            break;
+        }
+        else
+        {
+            continue;
+        }
+        
+    } // end of "for each found line"*/
+    
+    return foundGroundPlane;
+}
+
+GroundEstimator::line_t GroundEstimator::groundPlaneToVDisparityLine(const doppia::GroundPlane &groundPlane) {
+    const float & theta = -groundPlane.get_pitch();
+    const float & heigth = groundPlane.get_height();
+    
+    cout << "theta " << theta << endl;
+    cout << "heigth " << heigth << endl;
+    
+    line_t line;
+    
+    // based on equations 10 and 11 from V-disparity paper of Labayrade, Aubert and Tarel 2002.
+    const float v_origin = m_stereoV0 - m_stereoAlpha * std::tan(theta);
+    const float c_r = m_rectification.getBaseline() * cos(theta) / heigth;
+    
+    line.origin()(0) = v_origin;
+    line.direction()(0) = 1.0 / c_r;
+    
+    
+    exit(0);
+    
+    return line;
 }

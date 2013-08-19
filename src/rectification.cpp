@@ -110,6 +110,9 @@ bool Rectification::doRectification(const cv::Mat& img1, const cv::Mat& img2,
 
 bool Rectification::doRectificationLinear(const cv::Mat& img1, const cv::Mat& img2, cv::Mat& rectified1, cv::Mat& rectified2)
 {
+    m_distCoeffs[0] = cv::Mat::zeros(1, 4, CV_64FC1);
+    m_distCoeffs[1] = cv::Mat::zeros(1, 4, CV_64FC1);
+    
     assert((! m_intrinsicCoeffs[0].empty()) && (! m_intrinsicCoeffs[1].empty()) &&
             (! m_distCoeffs[0].empty()) && (! m_distCoeffs[1].empty()) &&
             (! m_R.empty()) && (! m_t.empty()));
@@ -122,10 +125,25 @@ bool Rectification::doRectificationLinear(const cv::Mat& img1, const cv::Mat& im
     cv::Mat mapX1, mapY1, mapX2, mapY2;
     cv::initUndistortRectifyMap(m_intrinsicCoeffs[0], m_distCoeffs[0], R1, P1, img1.size(), 
                                 CV_32FC1, mapX1,  mapY1);
+    
+//     R2 = cv::Mat(3, 4, CV_64FC1);
+//     for (uint32_t i = 0; i < 3; i++) {
+//         R2.at<double_t>(i, 3) = m_t.at<double_t>(i);
+//         for (uint32_t j = 0; j < 3; j++)
+//             R2.at<double_t>(i, j) = m_R.at<double_t>(i, j);
+//     }
     cv::initUndistortRectifyMap(m_intrinsicCoeffs[1], m_distCoeffs[1], R2, P2, img1.size(), 
                                 CV_32FC1, mapX2,  mapY2);
+//     mapX2 -= m_t.at<double>(0);
+    
     cv::remap(img1, rectified1, mapX1, mapY1, cv::INTER_NEAREST);
     cv::remap(img2, rectified2, mapX2, mapY2, cv::INTER_NEAREST);
+    
+    cout << "roi1 " << roi1 << endl;
+    cout << "roi2 " << roi2 << endl;
+    roi1.width = roi2.width = min(roi1.width, roi2.width);
+    roi1.height = roi2.height = img1.rows; //min(roi1.height, roi2.height);
+    roi1.y = roi2.y = 0;
     
     rectified1 = rectified1(roi1);
     rectified2 = rectified2(roi2);
@@ -135,6 +153,5 @@ bool Rectification::doRectificationLinear(const cv::Mat& img1, const cv::Mat& im
 
 uint32_t Rectification::getDisparityOffsetX()
 {
-    // 0, 3
     return m_intrinsicCoeffs[0].at<double>(0,3) - m_intrinsicCoeffs[1].at<double>(0,3);
 }
