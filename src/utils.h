@@ -19,6 +19,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <boost/gil/gil_all.hpp>
+#include <boost/program_options.hpp>
 
 inline void opencv2gil(const cv::Mat & imgOpenCV, boost::gil::rgb8_view_t & view) {
     for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
@@ -43,6 +44,11 @@ inline void gil2opencv(const T & view, cv::Mat & imgOpenCV) {
             pxOCV[2] = (uint8_t)view(x, y)[0];
         }
     }
+}
+
+template<class T> 
+void modify_variable_map(std::map<std::string, boost::program_options::variable_value>& vm, const std::string& opt, const T& val) { 
+    vm[opt].value() = boost::any(val);
 }
 
 #endif

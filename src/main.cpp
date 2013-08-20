@@ -34,8 +34,8 @@ using namespace std;
 using namespace stixel_world;
 
 int main(int argc, char * argv[]) {
-//     StixelsApplication app("/home/nestor/Dropbox/KULeuven/projects/StixelWorld/conf/test_stixel_world_lib.config.ini");
-    StixelsApplication app("/home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world/fast.config.ini");
+    StixelsApplication app("/home/nestor/Dropbox/KULeuven/projects/StixelWorld/conf/test_stixel_world_lib.config.ini");
+//     StixelsApplication app("/home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world/fast.config.ini");
     app.runStixelsApplication();
     
   return 0;

@@ -28,17 +28,17 @@ using namespace stixel_world;
 
 StixelsApplication::StixelsApplication(const string& optionsFile)
 {
-    boost::program_options::variables_map options = parseOptionsFile(optionsFile);
+    m_options = parseOptionsFile(optionsFile);
     
-    m_video_input_p.reset(doppia::VideoInputFactory::new_instance(options));
+    mp_video_input.reset(doppia::VideoInputFactory::new_instance(m_options));
     
-    if(not m_video_input_p)
+    if(not mp_video_input)
     {
         throw std::invalid_argument("Failed to initialize a video input module. "
         "No images to read, nothing to compute.");
     }
     
-    m_stixel_world_estimator_p.reset(doppia::StixelWorldEstimatorFactory::new_instance(options, *m_video_input_p));
+    mp_stixel_world_estimator.reset(doppia::StixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
     
     return;
     
@@ -99,28 +99,53 @@ void StixelsApplication::runStixelsApplication()
 
 void StixelsApplication::update()
 {
-    stixel_world::input_image_const_view_t currLeft = m_video_input_p->get_left_image();
-    m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(currLeft.dimensions());
-    boost::gil::copy_pixels(currLeft, boost::gil::view(m_prevLeftRectified));
+    // Updating the rectified images
+    stixel_world::input_image_const_view_t currLeft = mp_video_input->get_left_image();
+    stixel_world::input_image_const_view_t currRight = mp_video_input->get_right_image();
     
-    cout << m_prevLeftRectified.dimensions().x << endl;
+    boost::gil::copy_pixels(currLeft, boost::gil::view(m_prevLeftRectified));
+    boost::gil::copy_pixels(currRight, boost::gil::view(m_prevRightRectified));
 }
-
 
 bool StixelsApplication::iterate()
 {
-    if (! m_video_input_p->next_frame())
+    if (! mp_video_input->next_frame())
         return false;
+        
+    if (mp_linearRectification.use_count() == 0) {
+        boost::program_options::variables_map options = m_options;
+        modify_variable_map(options, "preprocess.rectify", true);
+
+        mp_linearRectification.reset(new doppia::CpuPreprocessor(
+            mp_video_input->get_left_image().dimensions(), mp_video_input->get_stereo_calibration(), options));
+
+//         mp_linearRectification.reset((doppia::CpuPreprocessor *)doppia::VideoInputFactory::new_instance(options));
+        
+        m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
+        m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
+        
+        m_currentLeft = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
+        m_currentRight = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
+    }
     
-    stixel_world::input_image_const_view_t
-        left_view(m_video_input_p->get_left_image()),
-        right_view(m_video_input_p->get_right_image());
+//     mp_linearRectification->run(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), 0, boost::gil::view(m_currentLeft));
+//     mp_linearRectification->run(stixel_world::input_image_const_view_t(mp_video_input->get_right_image()), 1, boost::gil::view(m_currentRight));
+        mp_linearRectification->run(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), 0, 
+                                    doppia::CpuPreprocessor::output_image_view_t(m_currentLeft._view));
+        mp_linearRectification->run(stixel_world::input_image_const_view_t(mp_video_input->get_right_image()), 1, 
+                                    doppia::CpuPreprocessor::output_image_view_t(m_currentRight._view));
+
+        doppia::AbstractStixelWorldEstimator::input_image_const_view_t
+            left_view(m_currentLeft._view),
+            right_view(m_currentRight._view);        
+
+        //         left_view(mp_video_input->get_left_image()),
+//         right_view(mp_video_input->get_right_image());
     
-    m_stixel_world_estimator_p->set_rectified_images_pair(left_view, right_view);
-    m_stixel_world_estimator_p->compute();
+    mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
+    mp_stixel_world_estimator->compute();
     
-//     stixels_t stixels = m_stixel_world_estimator_p->get_stixels();
-//     m_currStixels.reset(&stixels);
+    m_currStixels = mp_stixel_world_estimator->get_stixels();
     
     return true;
 }
@@ -129,25 +154,23 @@ void StixelsApplication::visualize()
 {
     cv::Mat img1Current, img2Current;
     cv::Mat img1Prev, img2Prev;
-    gil2opencv(stixel_world::input_image_const_view_t(m_video_input_p->get_left_image()), img1Current);
-    gil2opencv(stixel_world::input_image_const_view_t(m_video_input_p->get_right_image()), img2Current);
+    gil2opencv(stixel_world::input_image_const_view_t(boost::gil::view(m_currentLeft)), img1Current);
+    gil2opencv(stixel_world::input_image_const_view_t(boost::gil::view(m_currentRight)), img2Current);
     
-//     for (uint32_t i = 0; i < m_currStixels->size(); i++) {
-//         img1Current.at<cv::Vec3b>((*m_currStixels)[i].bottom_y, i) = cv::Vec3b(0, 0, 255);
-//         img1Current.at<cv::Vec3b>((*m_currStixels)[i].top_y, i) = cv::Vec3b(255, 0, 0);
-//     }
+    for (uint32_t i = 0; i < m_currStixels.size(); i++) {
+        img1Current.at<cv::Vec3b>(m_currStixels[i].bottom_y, i) = cv::Vec3b(0, 0, 255);
+        img1Current.at<cv::Vec3b>(m_currStixels[i].top_y, i) = cv::Vec3b(255, 0, 0);
+    }
     
     cv::imshow("img1", img1Current);
     cv::imshow("img2", img2Current);
     
-    if (m_video_input_p->get_current_frame_number() != 1) {
-        cout << "viz " << m_prevLeftRectified.dimensions().x << endl;
-//         doppia::AbstractVideoInput::input_image_t::view_t viewLeft(m_prevLeftRectified);
+    if (mp_video_input->get_current_frame_number() != 1) {
         gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
-//         gil2opencv(m_prevRightRectified, img2Prev);
-//         
+        gil2opencv(boost::gil::view(m_prevRightRectified), img2Prev);
+
         cv::imshow("img1Prev", img1Prev);
-//         cv::imshow("img2Prev", img2Prev);
+        cv::imshow("img2Prev", img2Prev);
     }
     
     uint8_t keycode = cv::waitKey(0);

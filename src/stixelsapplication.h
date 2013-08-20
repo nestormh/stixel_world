@@ -23,6 +23,7 @@
 
 #include "stixel_world_lib.hpp"
 #include "video_input/VideoInputFactory.hpp"
+#include "video_input/preprocessing/CpuPreprocessor.hpp"
 #include "stereo_matching/stixels/AbstractStixelWorldEstimator.hpp"
 
 using namespace std;
@@ -41,16 +42,25 @@ private:
     void update();
     void visualize();
     
-    boost::shared_ptr<doppia::AbstractVideoInput> m_video_input_p;
-    boost::shared_ptr<doppia::AbstractStixelWorldEstimator> m_stixel_world_estimator_p;
+    boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
+    boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
+    
+    doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
     
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
+    
+    
 //     boost::gil::rgb8_view_t m_prevLeftRectified, m_prevRightRectified;
 //     stixel_world::input_image_const_view_t m_currentLeftRectified, m_currentRightRectified;
 //     stixel_world::input_image_const_view_t m_prevLeftRectified, m_prevRightRectified;
     
-    boost::shared_ptr<stixels_t> m_currStixels;
-    boost::shared_ptr<stixels_t> m_prevStixels;
+//     boost::shared_ptr<stixels_t> mp_currStixels;
+//     boost::shared_ptr<stixels_t> mp_prevStixels;
+    stixels_t m_currStixels;
+    
+    boost::shared_ptr<doppia::CpuPreprocessor> mp_linearRectification;
+    
+    boost::program_options::variables_map m_options;
 };
 
     
