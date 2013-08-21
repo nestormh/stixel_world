@@ -45,8 +45,7 @@ private:
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
     
-    doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
-    
+//     doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
     
     
@@ -55,10 +54,8 @@ private:
 //     stixel_world::input_image_const_view_t m_prevLeftRectified, m_prevRightRectified;
     
 //     boost::shared_ptr<stixels_t> mp_currStixels;
-//     boost::shared_ptr<stixels_t> mp_prevStixels;
-    stixels_t m_currStixels;
-    
-    boost::shared_ptr<doppia::CpuPreprocessor> mp_linearRectification;
+    boost::shared_ptr<stixels_t> mp_prevStixels;
+//     stixels_t m_currStixels;
     
     boost::program_options::variables_map m_options;
 };
