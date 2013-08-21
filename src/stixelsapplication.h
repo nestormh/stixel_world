@@ -21,6 +21,8 @@
 
 #include <boost/program_options.hpp>
 
+#include "utils.h"
+
 #include "stixel_world_lib.hpp"
 #include "video_input/VideoInputFactory.hpp"
 #include "video_input/preprocessing/CpuPreprocessor.hpp"
@@ -41,6 +43,7 @@ private:
     bool iterate();
     void update();
     void visualize();
+    void findF();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;

@@ -28,17 +28,21 @@ class FundamentalMatrixEstimator
 {
 
 public:
-    FundamentalMatrixEstimator();
-    ~FundamentalMatrixEstimator();
-    
-    bool findF(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
-               const cv::Mat & imgLt1, const cv::Mat & imgRt1, 
-               cv::Mat & F);
+    static bool findF(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
+                    const cv::Mat & imgLt1, const cv::Mat & imgRt1, 
+                    cv::Mat& FL, cv::Mat& FR, const double & cornerThresh = 50);
 private:
-    void findInitialPoints(const cv::Mat & img, vector<cv::Point2d> & points);
-    void visualize(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
+    static void findInitialPoints(const cv::Mat & img, vector<cv::Point2f> & points, const double & cornerThresh);
+    static void findPairCorrespondences(const cv::Mat & img1, const cv::Mat & img2, 
+                                        const vector<cv::Point2f> & points1, vector<cv::Point2f> & points2);
+    static void cleanCorrespondences(const vector < vector < cv::Point2f > > & initialCorrespondences, 
+                                     vector < vector < cv::Point2f > > & finalCorrespondences);
+    static void select8Points(vector < vector < cv::Point2f > > & correspondences, vector< vector< cv::Point2f > > & finalCorrespondences);
+    static void visualize(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
                    const cv::Mat & imgLt1, const cv::Mat & imgRt1, 
-                   vector < vector < cv::Point2d > > correspondences);
+                   const vector< cv::Point2f > & initialPoints, 
+                   const vector< vector< cv::Point2f > > & correspondences, 
+                   const vector< vector< cv::Point2f > > & finalCorrespondences);
 };
 
 }

@@ -21,34 +21,43 @@
 #include <boost/gil/gil_all.hpp>
 #include <boost/program_options.hpp>
 
-inline void opencv2gil(const cv::Mat & imgOpenCV, boost::gil::rgb8_view_t & view) {
-    for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
-        for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
-            const cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
-            view(x, y)[0] = (uint8_t)pxOCV[2];
-            view(x, y)[1] = (uint8_t)pxOCV[1];
-            view(x, y)[2] = (uint8_t)pxOCV[0];
-        }
-    }
-}
-
-template <class T>
-inline void gil2opencv(const T & view, cv::Mat & imgOpenCV) {    
-    imgOpenCV = cv::Mat(view.height(), view.width(), CV_8UC3);
+namespace stixel_world {
+    extern "C" {
+        void opencv2gil(const cv::Mat & imgOpenCV, boost::gil::rgb8_view_t & view);
+        uint8_t waitForKey();
+    };
     
-    for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
-        for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
-            cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
-            pxOCV[0] = (uint8_t)view(x, y)[2];
-            pxOCV[1] = (uint8_t)view(x, y)[1];
-            pxOCV[2] = (uint8_t)view(x, y)[0];
+    template <class T>
+    inline void opencv2gil(const cv::Mat& imgOpenCV, T & view)
+    {
+        for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
+            for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
+                const cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
+                view(x, y)[0] = (uint8_t)pxOCV[2];
+                view(x, y)[1] = (uint8_t)pxOCV[1];
+                view(x, y)[2] = (uint8_t)pxOCV[0];
+            }
         }
     }
-}
 
-template<class T> 
-void modify_variable_map(std::map<std::string, boost::program_options::variable_value>& vm, const std::string& opt, const T& val) { 
-    vm[opt].value() = boost::any(val);
+    template <class T>
+    inline void gil2opencv(const T & view, cv::Mat & imgOpenCV) {    
+        imgOpenCV = cv::Mat(view.height(), view.width(), CV_8UC3);
+        
+        for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
+            for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
+                cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
+                pxOCV[0] = (uint8_t)view(x, y)[2];
+                pxOCV[1] = (uint8_t)view(x, y)[1];
+                pxOCV[2] = (uint8_t)view(x, y)[0];
+            }
+        }
+    }
+    
+    template<class T> 
+    void modify_variable_map(std::map<std::string, boost::program_options::variable_value>& vm, const std::string& opt, const T& val) { 
+        vm[opt].value() = boost::any(val);
+    }
 }
 
 #endif

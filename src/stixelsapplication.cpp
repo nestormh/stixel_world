@@ -19,9 +19,8 @@
 
 #include "stereo_matching/stixels/StixelWorldEstimatorFactory.hpp"
 
-// #include "stereo_matching/ground_plane/FastGroundPlaneEstimator.hpp"
-
 #include "utils.h"
+#include "fundamentalmatrixestimator.h"
 
 #include <boost/filesystem.hpp>
 #include <fstream>
@@ -89,22 +88,22 @@ boost::program_options::variables_map StixelsApplication::parseOptionsFile(const
 
 void StixelsApplication::runStixelsApplication()
 {
-    cv::namedWindow("img1Prev");
-    cv::namedWindow("img2Prev");
-    cv::namedWindow("img1");
-    cv::namedWindow("img2");
-    cv::moveWindow("img2", 700, 0);
-    cv::moveWindow("img1Prev", 0, 400);
-    cv::moveWindow("img2Prev", 700, 400);
+//     cv::namedWindow("img1Prev");
+//     cv::namedWindow("img2Prev");
+//     cv::namedWindow("img1");
+//     cv::namedWindow("img2");
+//     cv::moveWindow("img2", 700, 0);
+//     cv::moveWindow("img1Prev", 0, 400);
+//     cv::moveWindow("img2Prev", 700, 400);
     
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
     
     while (iterate()) {
-        visualize();
+        findF();
+//         visualize();
         update();
     }
-    
 }
 
 void StixelsApplication::update()
@@ -117,27 +116,11 @@ void StixelsApplication::update()
     boost::gil::copy_pixels(currLeft, boost::gil::view(m_prevLeftRectified));
     boost::gil::copy_pixels(currRight, boost::gil::view(m_prevRightRectified));
     
+    // Updating the stixels
     mp_prevStixels->resize(mp_stixel_world_estimator->get_stixels().size());
     std::copy(mp_stixel_world_estimator->get_stixels().begin(), 
                 mp_stixel_world_estimator->get_stixels().end(), 
                 mp_prevStixels->begin());
-    /*{
-        for (uint32_t i = 0; i < mp_prevStixels->size(); i++) {
-            (*mp_prevStixels)[i].width = mp_stixel_world_estimator->get_stixels().at(i).width;
-            (*mp_prevStixels)[i].x = mp_stixel_world_estimator->get_stixels().at(i).x;
-            (*mp_prevStixels)[i].bottom_y = mp_stixel_world_estimator->get_stixels().at(i).bottom_y;
-            (*mp_prevStixels)[i].top_y = mp_stixel_world_estimator->get_stixels().at(i).top_y;
-            (*mp_prevStixels)[i].default_height_value = mp_stixel_world_estimator->get_stixels().at(i).default_height_value;
-            (*mp_prevStixels)[i].disparity = mp_stixel_world_estimator->get_stixels().at(i).disparity;
-            (*mp_prevStixels)[i].backward_delta_x = mp_stixel_world_estimator->get_stixels().at(i).backward_delta_x;
-            (*mp_prevStixels)[i].valid_backward_delta_x = mp_stixel_world_estimator->get_stixels().at(i).valid_backward_delta_x;
-            (*mp_prevStixels)[i].backward_width = mp_stixel_world_estimator->get_stixels().at(i).backward_width;
-        }
-        //         stixels_t::iterator itPrev = mp_prevStixels->begin();
-        //         stixels_t::const_iterator itCurr = mp_stixel_world_estimator->get_stixels().begin();
-        //         for (; itPrev != mp_prevStixels->end(); itPrev++, itCurr++)
-        //             *itPrev = *itCurr; 
-    }*/
 }
 
 bool StixelsApplication::iterate()
@@ -153,6 +136,19 @@ bool StixelsApplication::iterate()
     mp_stixel_world_estimator->compute();
     
     return true;
+}
+
+void StixelsApplication::findF()
+{
+    if (mp_video_input->get_current_frame_number() == 1)
+        return;
+    
+    cv::Mat prevLeft, prevRight, currLeft, currRight, FL, FR;
+    gil2opencv(boost::gil::view(m_prevLeftRectified), prevLeft);
+    gil2opencv(boost::gil::view(m_prevRightRectified), prevRight);
+    gil2opencv(mp_video_input->get_left_image(), currLeft);
+    gil2opencv(mp_video_input->get_right_image(), currRight);
+    FundamentalMatrixEstimator::findF(prevLeft, prevRight, currLeft, currRight, FL, FR, 10);
 }
 
 void StixelsApplication::visualize()
@@ -186,15 +182,6 @@ void StixelsApplication::visualize()
         cv::imshow("img2Prev", img2Prev);
     }
     
-    uint8_t keycode = cv::waitKey(0);
-    switch (keycode) {
-        case 'q':
-            exit(0);
-            break;
-        default:
-            ;
-    }
+    waitForKey();
 }
-
-
 
