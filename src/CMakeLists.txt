@@ -6,6 +6,7 @@ add_executable(testStixelWorld fundamentalmatrixestimator.cpp
 #     doppia/GroundPlane.cpp
 #     doppia/IrlsLinesDetector.cpp
     main.cpp
+    ${POLAR_CALIBRATION_SRC}
 )
   
 include_directories(testStixelWorld
@@ -14,6 +15,7 @@ include_directories(testStixelWorld
 #     ${PCL_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}
+    ${POLAR_CALIBRATION_INCLUDE_PATH}
 #     emon.a
 #     ${CUDA_INCLUDE_DIRS}
     /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/

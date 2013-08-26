@@ -22,6 +22,7 @@
 #include <boost/program_options.hpp>
 
 #include "utils.h"
+#include "polarcalibration.h"
 
 #include "stixel_world_lib.hpp"
 #include "video_input/VideoInputFactory.hpp"
@@ -43,14 +44,14 @@ private:
     bool iterate();
     void update();
     void visualize();
-    void findF();
+    bool rectifyPolar();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
     
 //     doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
-    
+    doppia::AbstractVideoInput::input_image_t m_polarLt0, m_polarRt0, m_polarLt1, m_polarRt1;
     
 //     boost::gil::rgb8_view_t m_prevLeftRectified, m_prevRightRectified;
 //     stixel_world::input_image_const_view_t m_currentLeftRectified, m_currentRightRectified;
@@ -61,6 +62,8 @@ private:
 //     stixels_t m_currStixels;
     
     boost::program_options::variables_map m_options;
+    
+    boost::shared_ptr<PolarCalibration> mp_polarCalibration;
 };
 
     

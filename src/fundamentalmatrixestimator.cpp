@@ -22,9 +22,10 @@ using namespace stixel_world;
 
 bool FundamentalMatrixEstimator::findF(const cv::Mat& imgLt0, const cv::Mat& imgRt0, 
                                        const cv::Mat& imgLt1, const cv::Mat& imgRt1, 
-                                       cv::Mat& FL, cv::Mat& FR, const double & cornerThresh)
+                                       cv::Mat& FL, cv::Mat& FR, vector < vector < cv::Point2f > > & finalCorrespondences,
+                                       const double & cornerThresh)
 {
-    vector < vector < cv::Point2f > > initialPoints(5), points, finalCorrespondences;
+    vector < vector < cv::Point2f > > initialPoints(5), points;
     findInitialPoints(imgLt0, initialPoints[0], cornerThresh);
     
     findPairCorrespondences(imgLt0, imgRt0, initialPoints[0], initialPoints[1]);
@@ -42,7 +43,7 @@ bool FundamentalMatrixEstimator::findF(const cv::Mat& imgLt0, const cv::Mat& img
     if ((cv::countNonZero(FL) == 0) || (cv::countNonZero(FR) == 0))
         return false;
     
-    visualize(imgLt0, imgRt0, imgLt1, imgRt1, initialPoints[0], points, finalCorrespondences);
+//     visualize(imgLt0, imgRt0, imgLt1, imgRt1, initialPoints[0], points, finalCorrespondences);
     
     return true;
 }
@@ -97,7 +98,8 @@ inline void FundamentalMatrixEstimator::cleanCorrespondences(const vector< vecto
     }
 }
 
-inline void FundamentalMatrixEstimator::select8Points(vector< vector< cv::Point2f > >& correspondences, vector< vector< cv::Point2f > >& finalCorrespondences)
+inline void FundamentalMatrixEstimator::select8Points(vector< vector< cv::Point2f > >& correspondences, 
+                                                      vector< vector< cv::Point2f > >& finalCorrespondences)
 {
     const vector< cv::Point2f > & points = correspondences[0];
     vector< int32_t > hull;

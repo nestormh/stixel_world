@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
-project(PolarCalibration)
+project(StixelWorld)
 
 # set(OpenCV_DIR "/usr/local/share/OpenCV")
 # set(PCL_DIR "/usr/local/share/pcl-1.6")
@@ -8,6 +8,12 @@ project(PolarCalibration)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frounding-math")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -unroll-loops -march=native")
+set(POLAR_CALIBRATION_PATH "/home/nestor/Dropbox/KULeuven/projects/PolarCalibration/src/")
+set(POLAR_CALIBRATION_INCLUDE_PATH ${POLAR_CALIBRATION_PATH})
+set(POLAR_CALIBRATION_SRC 
+    ${POLAR_CALIBRATION_PATH}/polarcalibration.cpp 
+    ${POLAR_CALIBRATION_PATH}/calibration.pb.cc
+    ${POLAR_CALIBRATION_PATH}/visualizePolarCalibration.cpp)
 # set(CMAKE_LINK_LIBRARY_FLAG "${CMAKE_LINK_LIBRARY_FLAG} -fopenmp")
 
 # set (CMAKE_MODULE_PATH "/usr/local/share/pcl-1.6" ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})

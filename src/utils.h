@@ -23,13 +23,11 @@
 
 namespace stixel_world {
     extern "C" {
-        void opencv2gil(const cv::Mat & imgOpenCV, boost::gil::rgb8_view_t & view);
         uint8_t waitForKey();
     };
-    
+
     template <class T>
-    inline void opencv2gil(const cv::Mat& imgOpenCV, T & view)
-    {
+    inline void opencv2gil(const cv::Mat & imgOpenCV, T & view) {
         for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
             for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
                 const cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
@@ -39,7 +37,7 @@ namespace stixel_world {
             }
         }
     }
-
+    
     template <class T>
     inline void gil2opencv(const T & view, cv::Mat & imgOpenCV) {    
         imgOpenCV = cv::Mat(view.height(), view.width(), CV_8UC3);

@@ -30,7 +30,8 @@ class FundamentalMatrixEstimator
 public:
     static bool findF(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
                     const cv::Mat & imgLt1, const cv::Mat & imgRt1, 
-                    cv::Mat& FL, cv::Mat& FR, const double & cornerThresh = 50);
+                    cv::Mat& FL, cv::Mat& FR, vector < vector < cv::Point2f > > & finalCorrespondences,
+                    const double & cornerThresh = 50);
 private:
     static void findInitialPoints(const cv::Mat & img, vector<cv::Point2f> & points, const double & cornerThresh);
     static void findPairCorrespondences(const cv::Mat & img1, const cv::Mat & img2, 
