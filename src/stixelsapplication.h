@@ -64,6 +64,8 @@ private:
     boost::program_options::variables_map m_options;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
+    
+    uint32_t m_initialFrame;
 };
 
     

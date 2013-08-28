@@ -40,10 +40,11 @@ bool FundamentalMatrixEstimator::findF(const cv::Mat& imgLt0, const cv::Mat& img
     FL = cv::findFundamentalMat(finalCorrespondences[0], finalCorrespondences[3], CV_FM_8POINT);
     FR = cv::findFundamentalMat(finalCorrespondences[1], finalCorrespondences[2], CV_FM_8POINT);
     
-    if ((cv::countNonZero(FL) == 0) || (cv::countNonZero(FR) == 0))
+    if ((cv::countNonZero(FL) == 0) || (cv::countNonZero(FR) == 0) ||
+        (! cv::checkRange(FL)) || (!cv::checkRange(FR)))
         return false;
     
-//     visualize(imgLt0, imgRt0, imgLt1, imgRt1, initialPoints[0], points, finalCorrespondences);
+    visualize(imgLt0, imgRt0, imgLt1, imgRt1, initialPoints[0], points, finalCorrespondences);
     
     return true;
 }
@@ -112,10 +113,12 @@ inline void FundamentalMatrixEstimator::select8Points(vector< vector< cv::Point2
     cv::Mat hullM;
     cv::convexHull(points, hull, false, false);
     
-    if (hull.size() >= 8) {
-        for (uint32_t idx1 = 0, idx2 = 0; idx1 < 8; idx1++, idx2 += hull.size() / 8) {
-            for (uint32_t i = 0; i < finalCorrespondences.size(); i++)
-                finalCorrespondences[i][idx1] = correspondences[i][hull[idx2]];
+    if (hull.size() >= 8) { 
+        double idx2 = 0.0;
+        for (uint32_t idx1 = 0/*, idx2 = 0*/; idx1 < 8; idx1++, idx2 += (double)hull.size() / 8.0) {
+            for (uint32_t i = 0; i < finalCorrespondences.size(); i++) {
+                finalCorrespondences[i][idx1] = correspondences[i][hull[(uint32_t)idx2]];
+            }
         }
     } else {
         vector<bool> used(points.size());
@@ -131,7 +134,7 @@ inline void FundamentalMatrixEstimator::select8Points(vector< vector< cv::Point2
             }
             used[idx] = true;
             for (uint32_t j = 0; j < finalCorrespondences.size(); j++)
-                finalCorrespondences[j][i] = correspondences[j][hull[idx]];
+                finalCorrespondences[j][i] = correspondences[j][idx];
         }
     }
 }

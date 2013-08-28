@@ -23,6 +23,7 @@
 #include "fundamentalmatrixestimator.h"
 
 #include <boost/filesystem.hpp>
+
 #include <fstream>
 
 using namespace stixel_world;
@@ -38,11 +39,13 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
         throw std::invalid_argument("Failed to initialize a video input module. "
         "No images to read, nothing to compute.");
     }
+
+    m_initialFrame = mp_video_input->get_current_frame_number() + 1;
     
     mp_stixel_world_estimator.reset(doppia::StixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
     mp_prevStixels.reset(new stixels_t);
     mp_polarCalibration.reset(new PolarCalibration());
-    
+        
     return;
 }
 
@@ -154,7 +157,7 @@ bool StixelsApplication::iterate()
 
 bool StixelsApplication::rectifyPolar()
 {
-    if (mp_video_input->get_current_frame_number() == 1)
+    if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return true;
     
     cv::Mat prevLeft, prevRight, currLeft, currRight, FL, FR;
@@ -166,6 +169,17 @@ bool StixelsApplication::rectifyPolar()
     
     if (! FundamentalMatrixEstimator::findF(prevLeft, prevRight, currLeft, currRight, FL, FR, correspondences, 10))
         return false;
+    
+    //NOTE: Remove after debugging
+    {
+        char matName[1024];
+        sprintf(matName, "/tmp/results/mats/lastMat_%04d.xml", mp_video_input->get_current_frame_number());
+        cv::FileStorage file(matName, cv::FileStorage::WRITE);
+        file << "F" << FL;
+        file.release();
+    }
+    // end of NOTE
+    
     
     if (!  mp_polarCalibration->compute(prevLeft, currLeft, FL, correspondences[0], correspondences[3])) {
         cout << "Error while trying to get the polar alignment for the images in the left" << endl;
@@ -197,7 +211,7 @@ bool StixelsApplication::rectifyPolar()
 
 void StixelsApplication::visualize()
 {
-    if (mp_video_input->get_current_frame_number() == 1)
+    if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return;
     
     cv::Mat img1Current, img2Current;
@@ -221,7 +235,7 @@ void StixelsApplication::visualize()
         img1Current.at<cv::Vec3b>(img1Current.rows - 128 + mp_stixel_world_estimator->get_stixels().at(i).disparity, i) = cv::Vec3b(0, 0, 255);
     }
     
-    if (mp_video_input->get_current_frame_number() != 1) {
+    if (mp_video_input->get_current_frame_number() != m_initialFrame) {
         gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
         gil2opencv(boost::gil::view(m_prevRightRectified), img2Prev);
         
@@ -262,10 +276,23 @@ void StixelsApplication::visualize()
     
     cv::imshow("polar1", polarOutput1);
     cv::imshow("polar2", polarOutput2);
+    cv::subtract(polarOutput1, polarOutput2, polarOutput1);
+    cv::imshow("polarSub", polarOutput1);
     
-//     char testName[1024];
-//     sprintf(testName, "/tmp/results/img%04d.png", mp_video_input->get_current_frame_number());
-//     cv::imwrite(string(testName), polarOutput1);
+    //NOTE: Remove after debugging
+    {
+//         gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), img1Current);
+//         gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
+//         mp_polarCalibration->getRectifiedImages(img1Prev, img1Current, Lt0, Lt1);
+//         cv::Mat saveImg(Lt0.rows, 3 * Lt0.cols, CV_8UC3);
+//         Lt0.copyTo(saveImg(cv::Rect(0, 0, Lt0.cols, Lt0.rows)));
+//         Lt1.copyTo(saveImg(cv::Rect(Lt0.cols, 0, Lt1.cols, Lt1.rows)));
+//         saveImg(cv::Rect(Lt0.cols * 2, 0, Lt0.cols, Lt0.rows)) = Lt0 - Lt1;
+//         char testName[1024];
+//         sprintf(testName, "/tmp/results/img%04d.png", mp_video_input->get_current_frame_number());
+//         cv::imwrite(string(testName), saveImg);
+    }
+    // end of NOTE
     
     waitForKey();
 }
