@@ -28,15 +28,38 @@ class FundamentalMatrixEstimator
 {
 
 public:
+    static const uint8_t METHOD_OFLOW = 0;
+    static const uint8_t METHOD_SURF = 1;
+    static const uint8_t METHOD_COMBINED = 2;
+    
     static bool findF(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
                     const cv::Mat & imgLt1, const cv::Mat & imgRt1, 
                     cv::Mat& FL, cv::Mat& FR, vector < vector < cv::Point2f > > & finalCorrespondences,
-                    const double & cornerThresh = 50);
+                    const uint8_t & method = METHOD_OFLOW, const double & cornerThresh = 50);
 private:
+    static const uint8_t MATCH_STEREO_PAIR = 0;
+    static const uint8_t MATCH_BETWEEN_FRAMES = 1;
+    
+    static const double MAX_HORIZONTAL_DIST = 1.0;
+    static const double MAX_FLOW_DIST = 20.0;
+    static const double MAX_CICLE_DIST = 1.0;
+    
     static void findInitialPoints(const cv::Mat & img, vector<cv::Point2f> & points, const double & cornerThresh);
-    static void findPairCorrespondences(const cv::Mat & img1, const cv::Mat & img2, 
-                                        const vector<cv::Point2f> & points1, vector<cv::Point2f> & points2);
-    static void cleanCorrespondences(const vector < vector < cv::Point2f > > & initialCorrespondences, 
+    static void findPairCorrespondencesOFlow(const cv::Mat & img1, const cv::Mat & img2, 
+                                             vector<cv::Point2f> & points1, vector<cv::Point2f> & points2,
+                                             const int & matchingMode = MATCH_STEREO_PAIR);
+    static void findPairCorrespondencesSURF(const cv::Mat & img1, const cv::Mat & img2, 
+                                            vector<cv::KeyPoint> & keypoints1, vector<cv::KeyPoint> & keypoints2,
+                                            const int & matchingMode = MATCH_STEREO_PAIR);
+    static void cleanMatchesStereoPair(const vector <cv::KeyPoint> & keypoints1, const vector <cv::KeyPoint> & keypoints2,
+                                       const vector<cv::DMatch> & matches1, vector<cv::DMatch> & matches2);
+    static void cleanMatchesBetweenFrames(const vector <cv::KeyPoint> & keypoints1, const vector <cv::KeyPoint> & keypoints2,
+                                          const vector<cv::DMatch> & matches1, vector<cv::DMatch> & matches2);
+    
+    static void cleanMatchesStereoPair(vector< cv::Point2f >& points1, vector< cv::Point2f >& points2);
+    static void cleanMatchesBetweenFrames(vector< cv::Point2f >& points1, vector< cv::Point2f >& points2);
+    
+    static void cleanCorrespondences(const vector < vector < cv::Point2f > > & initialCorrespondences,
                                      vector < vector < cv::Point2f > > & finalCorrespondences);
     static void select8Points(vector < vector < cv::Point2f > > & correspondences, vector< vector< cv::Point2f > > & finalCorrespondences);
     static void visualize(const cv::Mat & imgLt0, const cv::Mat & imgRt0, 
@@ -44,6 +67,9 @@ private:
                    const vector< cv::Point2f > & initialPoints, 
                    const vector< vector< cv::Point2f > > & correspondences, 
                    const vector< vector< cv::Point2f > > & finalCorrespondences);
+    static void drawMatches(const cv::Mat & img1, const cv::Mat & img2, 
+                     const vector<cv::Point2f> & points1, const vector<cv::Point2f> & points2);
+    static double measureFundMatrixQuality(const vector<cv::Point2f> & points1, const vector<cv::Point2f> & points2, const cv::Mat & F);
 };
 
 }

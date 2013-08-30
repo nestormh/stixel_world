@@ -45,6 +45,7 @@ private:
     void update();
     void visualize();
     bool rectifyPolar();
+    void transformStixels();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
@@ -57,13 +58,15 @@ private:
 //     stixel_world::input_image_const_view_t m_currentLeftRectified, m_currentRightRectified;
 //     stixel_world::input_image_const_view_t m_prevLeftRectified, m_prevRightRectified;
     
-//     boost::shared_ptr<stixels_t> mp_currStixels;
     boost::shared_ptr<stixels_t> mp_prevStixels;
-//     stixels_t m_currStixels;
+    
+    stixels_t m_transfStixelsLt0, m_transfStixelsLt1;
     
     boost::program_options::variables_map m_options;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
+    
+    vector<cv::Point2d> basePointsTransfLt0, topPointsTransfLt0, basePointsTransfLt1, topPointsTransfLt1;
     
     uint32_t m_initialFrame;
 };

@@ -91,23 +91,7 @@ boost::program_options::variables_map StixelsApplication::parseOptionsFile(const
 
 void StixelsApplication::runStixelsApplication()
 {
-    cv::namedWindow("linear");
-    cv::namedWindow("polar1");
-    cv::namedWindow("polar2");
-//     cv::namedWindow("img2Prev");
-//     cv::namedWindow("img1");
-//     cv::namedWindow("img2");
-//     cv::namedWindow("Lt0");
-//     cv::namedWindow("Rt0");
-//     cv::namedWindow("Lt1");
-//     cv::namedWindow("Rt1");
-//     cv::moveWindow("img2", 700, 0);
-//     cv::moveWindow("img1Prev", 0, 400);
-//     cv::moveWindow("img2Prev", 700, 400);
-//     cv::moveWindow("Lt0", 1, 1);
-//     cv::moveWindow("Rt0", 300, 0);
-//     cv::moveWindow("Lt1", 600, 0);
-//     cv::moveWindow("Rt1", 900, 0);
+    cv::namedWindow("output");
     
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
@@ -167,17 +151,17 @@ bool StixelsApplication::rectifyPolar()
     gil2opencv(mp_video_input->get_right_image(), currRight);
     vector < vector < cv::Point2f > > correspondences;
     
-    if (! FundamentalMatrixEstimator::findF(prevLeft, prevRight, currLeft, currRight, FL, FR, correspondences, 10))
+    if (! FundamentalMatrixEstimator::findF(prevLeft, prevRight, currLeft, currRight, FL, FR, correspondences, 50))
         return false;
     
     //NOTE: Remove after debugging
-    {
-        char matName[1024];
-        sprintf(matName, "/tmp/results/mats/lastMat_%04d.xml", mp_video_input->get_current_frame_number());
-        cv::FileStorage file(matName, cv::FileStorage::WRITE);
-        file << "F" << FL;
-        file.release();
-    }
+//     {
+//         char matName[1024];
+//         sprintf(matName, "/tmp/results/mats/lastMat_%04d.xml", mp_video_input->get_current_frame_number());
+//         cv::FileStorage file(matName, cv::FileStorage::WRITE);
+//         file << "F" << FL;
+//         file.release();
+//     }
     // end of NOTE
     
     
@@ -186,6 +170,9 @@ bool StixelsApplication::rectifyPolar()
         return false;
     }
     
+    transformStixels();
+    
+    // TODO: Remove, this is just for visualization
     cv::Mat Lt0, Rt0, Lt1, Rt1;
     
     mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Lt0, Lt1);
@@ -209,6 +196,55 @@ bool StixelsApplication::rectifyPolar()
     return true;
 }
 
+void StixelsApplication::transformStixels()
+{
+    const stixels_t & prevStixels = *mp_prevStixels;
+    const stixels_t & currStixels = mp_stixel_world_estimator->get_stixels();
+    
+//     stixels_t m_tStixelsLt0, m_tStixelsLt1;
+    vector<cv::Point2d> basePointsLt0(prevStixels.size()), topPointsLt0(prevStixels.size());
+    vector<cv::Point2d> basePointsLt1(currStixels.size()), topPointsLt1(currStixels.size());
+    
+//     vector<cv::Point2d> basePointsTransfLt0, topPointsTransfLt0, basePointsTransfLt1, topPointsTransfLt1;
+    
+    for (uint32_t i = 0; i < prevStixels.size(); i++) {
+        basePointsLt0[i] = cv::Point2d(prevStixels[i].x, prevStixels[i].bottom_y);
+        topPointsLt0[i] = cv::Point2d(prevStixels[i].x, prevStixels[i].top_y);
+    }
+
+    for (uint32_t i = 0; i < currStixels.size(); i++) {
+        basePointsLt1[i] = cv::Point2d(currStixels[i].x, currStixels[i].bottom_y);
+        topPointsLt1[i] = cv::Point2d(currStixels[i].x, currStixels[i].top_y);
+    }
+    
+    mp_polarCalibration->transformPoints(basePointsLt0, basePointsTransfLt0, 1);
+    mp_polarCalibration->transformPoints(topPointsLt0, topPointsTransfLt0, 1);
+    mp_polarCalibration->transformPoints(basePointsLt1, basePointsTransfLt1, 1);
+    mp_polarCalibration->transformPoints(topPointsLt1, topPointsTransfLt1, 1);
+    
+    //TODO: Use stixel_t as data type. Then store them into a global variable, so previous transformed stixels
+    // are not calculated again. Change this in the visualization part
+}
+
+void drawLine(cv::Mat & img, const cv::Point2d & p1, 
+              const cv::Point2d & p2, const cv::Scalar & color) {
+
+    if ((p1 != cv::Point2d(0, 0)) && (p2 != cv::Point2d(0, 0))) {
+        const cv::Point2d & pA = (p1.y < p2.y)? p1 : p2;
+        const cv::Point2d & pB = (p1.y < p2.y)? p2 : p1;
+        
+        const double dist1 = pA.y + img.rows - pB.y;
+        const double dist2 = pB.y - pA.y;
+        
+        if (dist1 >= dist2) {
+            cv::line(img, pA, pB, color);
+        } else {
+            cv::line(img, pA, cv::Point2d(pA.x, 0), color);
+            cv::line(img, pB, cv::Point2d(pA.x, img.rows), color);
+        }
+    }
+}
+
 void StixelsApplication::visualize()
 {
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
@@ -219,68 +255,55 @@ void StixelsApplication::visualize()
     gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), img1Current);
     gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_right_image()), img2Current);
     
-    cv::Mat linearOutput = cv::Mat::zeros(600, 800, CV_8UC3);
+    cv::Mat output = cv::Mat::zeros(600, 800, CV_8UC3);
+    
     cv::Mat scale;
-    cv::resize(img1Current, scale, cv::Size(400, 300));
-    scale.copyTo(linearOutput(cv::Rect(0, 300, 400, 300)));
-    
-    for (uint32_t i = 0; i < mp_stixel_world_estimator->get_stixels().size(); i++) {
-//         img1Current.at<cv::Vec3b>(mp_stixel_world_estimator->get_stixels().at(i).bottom_y, i) = cv::Vec3b(0, 0, 255);
-//         img1Current.at<cv::Vec3b>(mp_stixel_world_estimator->get_stixels().at(i).top_y, i) = cv::Vec3b(255, 0, 0);
-        const cv::Point2d p1(i * mp_stixel_world_estimator->get_stixels().at(i).width, mp_stixel_world_estimator->get_stixels().at(i).bottom_y);
-        const cv::Point2d p2((i + 1) * mp_stixel_world_estimator->get_stixels().at(i).width, mp_stixel_world_estimator->get_stixels().at(i).top_y);
-        
-        cv::rectangle(img1Current, p1, p2, cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF), -1);
-        
-        img1Current.at<cv::Vec3b>(img1Current.rows - 128 + mp_stixel_world_estimator->get_stixels().at(i).disparity, i) = cv::Vec3b(0, 0, 255);
-    }
-    
-    if (mp_video_input->get_current_frame_number() != m_initialFrame) {
-        gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
-        gil2opencv(boost::gil::view(m_prevRightRectified), img2Prev);
-        
-        cv::resize(img1Prev, scale, cv::Size(400, 300));
-        scale.copyTo(linearOutput(cv::Rect(0, 0, 400, 300)));
-        
-        for (uint32_t i = 0; i < mp_prevStixels->size(); i++) {
-//             img1Prev.at<cv::Vec3b>(mp_prevStixels->at(i).bottom_y, i) = cv::Vec3b(0, 0, 255);
-//             img1Prev.at<cv::Vec3b>(mp_prevStixels->at(i).top_y, i) = cv::Vec3b(255, 0, 0);
-            
-            const cv::Point2d p1(i * mp_prevStixels->at(i).width, mp_prevStixels->at(i).bottom_y);
-            const cv::Point2d p2(i * mp_prevStixels->at(i).width, mp_prevStixels->at(i).top_y);
-            
-            cv::rectangle(img1Prev, p1, p2, cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF), -1);
-            
-            img1Prev.at<cv::Vec3b>(img1Prev.rows - 128 + mp_prevStixels->at(i).disparity, i) = cv::Vec3b(0, 0, 255);
-        }
-        cv::resize(img1Prev, scale, cv::Size(400, 300));
-        scale.copyTo(linearOutput(cv::Rect(400, 0, 400, 300)));
-    }
-    cv::resize(img1Current, scale, cv::Size(400, 300));
-    scale.copyTo(linearOutput(cv::Rect(400, 300, 400, 300)));
-    
-    cv::imshow("linear", linearOutput);
-    
-    cv::Mat polarOutput1 = cv::Mat::zeros(600, 400, CV_8UC3);
-    cv::Mat polarOutput2 = cv::Mat::zeros(600, 400, CV_8UC3);
-    
+    gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
+    gil2opencv(boost::gil::view(m_prevRightRectified), img2Prev);
+
     cv::Mat Lt0, Lt1;
     mp_polarCalibration->getRectifiedImages(img1Prev, img1Current, Lt0, Lt1);
     
     if (!Lt0.empty() && !Lt1.empty()) {
+        if (mp_video_input->get_current_frame_number() != m_initialFrame) {
+            for (uint32_t i = 0; i < mp_prevStixels->size(); i++) {
+                const cv::Point2d & p1bLin = cv::Point2d(mp_prevStixels->at(i).x, mp_prevStixels->at(i).bottom_y);
+                const cv::Point2d & p2bLin = cv::Point2d(mp_stixel_world_estimator->get_stixels().at(i).x, 
+                                                     mp_stixel_world_estimator->get_stixels().at(i).bottom_y);
+                const cv::Point2d & p1tLin = cv::Point2d(mp_prevStixels->at(i).x, mp_prevStixels->at(i).top_y);
+                const cv::Point2d & p2tLin = cv::Point2d(mp_stixel_world_estimator->get_stixels().at(i).x, 
+                                                          mp_stixel_world_estimator->get_stixels().at(i).top_y);
+                
+                const cv::Point2d & p1bPolar = basePointsTransfLt0[i];
+                const cv::Point2d & p2bPolar = basePointsTransfLt1[i];
+                const cv::Point2d & p1tPolar = topPointsTransfLt0[i];
+                const cv::Point2d & p2tPolar = topPointsTransfLt1[i];
+                
+                cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+                drawLine(Lt0, p1bPolar, p2bPolar, color);
+                drawLine(Lt0, p1tPolar, p2tPolar, color);
+                
+                cv::circle(img1Prev, p1bLin, 2, color, -1);
+                cv::circle(img1Prev, p1tLin, 2, color, -1);
+                cv::circle(img1Current, p2bLin, 2, color, -1);
+                cv::circle(img1Current, p2tLin, 2, color, -1);
+            }
+        }
+        
         cv::resize(Lt0, scale, cv::Size(400, 600));
-        scale.copyTo(polarOutput1(cv::Rect(0, 0, 400, 600)));
-        cv::resize(Lt1, scale, cv::Size(400, 600));
-        scale.copyTo(polarOutput2(cv::Rect(0, 0, 400, 600)));
+        scale.copyTo(output(cv::Rect(400, 0, 400, 600)));
+        
     }
+    cv::resize(img1Prev, scale, cv::Size(400, 300));
+    scale.copyTo(output(cv::Rect(0, 0, 400, 300)));
     
-    cv::imshow("polar1", polarOutput1);
-    cv::imshow("polar2", polarOutput2);
-    cv::subtract(polarOutput1, polarOutput2, polarOutput1);
-    cv::imshow("polarSub", polarOutput1);
+    cv::resize(img1Current, scale, cv::Size(400, 300));
+    scale.copyTo(output(cv::Rect(0, 300, 400, 300)));
     
+    cv::imshow("output", output);
+        
     //NOTE: Remove after debugging
-    {
+//     {
 //         gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), img1Current);
 //         gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
 //         mp_polarCalibration->getRectifiedImages(img1Prev, img1Current, Lt0, Lt1);
@@ -291,7 +314,7 @@ void StixelsApplication::visualize()
 //         char testName[1024];
 //         sprintf(testName, "/tmp/results/img%04d.png", mp_video_input->get_current_frame_number());
 //         cv::imwrite(string(testName), saveImg);
-    }
+//     }
     // end of NOTE
     
     waitForKey();
