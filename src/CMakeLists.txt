@@ -1,8 +1,11 @@
-add_executable(testStixelWorld fundamentalmatrixestimator.cpp 
+add_executable(testStixelWorld stixelstracker.cpp fundamentalmatrixestimator.cpp 
     utils.cpp
     stixelsapplication.cpp 
     groundestimator.cpp 
     rectification.cpp
+    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/AbstractStixelMotionEstimator.cpp
+    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/DummyStixelMotionEstimator.cpp
+    /home/nestor/Dropbox/KULeuven/projects/doppia/src/drawing/gil/colors.cpp
 #     doppia/GroundPlane.cpp
 #     doppia/IrlsLinesDetector.cpp
     main.cpp
@@ -21,6 +24,7 @@ include_directories(testStixelWorld
     /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/
     /home/nestor/Dropbox/KULeuven/projects/doppia/src/
     /home/nestor/Dropbox/KULeuven/projects/doppia/libs/
+    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/
 )
 
 target_link_libraries(testStixelWorld

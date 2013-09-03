@@ -28,6 +28,8 @@
 #include "video_input/VideoInputFactory.hpp"
 #include "video_input/preprocessing/CpuPreprocessor.hpp"
 #include "stereo_matching/stixels/AbstractStixelWorldEstimator.hpp"
+#include "stereo_matching/stixels/motion/DummyStixelMotionEstimator.hpp"
+#include "stixelstracker.h"
 
 using namespace std;
 
@@ -49,6 +51,7 @@ private:
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
+    boost::shared_ptr<doppia::AbstractStixelMotionEstimator> mp_stixel_motion_estimator;
     
 //     doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
@@ -69,6 +72,8 @@ private:
     vector<cv::Point2d> basePointsTransfLt0, topPointsTransfLt0, basePointsTransfLt1, topPointsTransfLt1;
     
     uint32_t m_initialFrame;
+    
+    
 };
 
     

@@ -45,6 +45,11 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
     mp_stixel_world_estimator.reset(doppia::StixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
     mp_prevStixels.reset(new stixels_t);
     mp_polarCalibration.reset(new PolarCalibration());
+    
+    
+    mp_stixel_motion_estimator.reset( 
+            new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+                                                mp_stixel_world_estimator->get_stixel_width() ) );
         
     return;
 }
@@ -63,9 +68,33 @@ boost::program_options::variables_map StixelsApplication::parseOptionsFile(const
             return options;
         }
 
-        init_stixel_world(configurationFilePath);
+//         init_stixel_world(configurationFilePath);
         boost::program_options::options_description desc;
         get_options_description(desc);
+        desc.add(StixelsTracker::get_args_options());
+        
+//         desc.add_options()
+//         ("save_stixels",
+//          program_options::value<bool>()->default_value(false),
+//          "save the estimated stixels in a data sequence file")
+//         
+//         ("save_ground_plane_corridor",
+//          program_options::value<bool>()->default_value(false),
+//          "save the estimated expected bottom and top of objects in the data sequence file")
+//         
+//         ("gui.disabled",
+//          program_options::value<bool>()->default_value(false),
+//          "if true, no user interface will be presented")
+//         
+//         ("silent_mode",
+//          program_options::value<bool>()->default_value(false),
+//          "if true, no status information will be printed at run time (use this for speed benchmarking)")
+//         
+//         ("stixel_world.motion",
+//          boost::program_options::value<bool>()->default_value(false),
+//          "if true the stixels motion will be estimated")
+        
+//         ;
         
         printf("Going to parse the configuration file: %s\n", configurationFilePath.c_str());
 
@@ -78,7 +107,7 @@ boost::program_options::variables_map StixelsApplication::parseOptionsFile(const
         }
         catch (...)
         {
-            cout << "\033[1;31mError parsing THE configuration file named:\033[0m "
+            cout << "\033[1;31mError parsing the configuration file named:\033[0m "
             << configurationFilePath << endl;
             cout << desc << endl;
             throw;
@@ -112,6 +141,8 @@ void StixelsApplication::update()
     boost::gil::copy_pixels(currLeft, boost::gil::view(m_prevLeftRectified));
     boost::gil::copy_pixels(currRight, boost::gil::view(m_prevRightRectified));
     
+    mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
+    
     // Updating the stixels
     mp_prevStixels->resize(mp_stixel_world_estimator->get_stixels().size());
     std::copy(mp_stixel_world_estimator->get_stixels().begin(), 
@@ -131,10 +162,15 @@ bool StixelsApplication::iterate()
     mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
     mp_stixel_world_estimator->compute();
     
+    mp_stixel_motion_estimator->set_new_rectified_image(left_view);
+        
     if (! rectifyPolar()) {
         // TODO: Do something in this case
         return true;
     }
+    
+    if(mp_video_input->get_current_frame_number() > m_initialFrame)
+        mp_stixel_motion_estimator->compute();
         
     return true;
 }
@@ -250,12 +286,13 @@ void StixelsApplication::visualize()
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return;
     
-    cv::Mat img1Current, img2Current;
+    cv::Mat img1Current, img2Current, imgTracking;
     cv::Mat img1Prev, img2Prev;
     gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), img1Current);
     gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_right_image()), img2Current);
+    gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), imgTracking);
     
-    cv::Mat output = cv::Mat::zeros(600, 800, CV_8UC3);
+    cv::Mat output = cv::Mat::zeros(600, 1200, CV_8UC3);
     
     cv::Mat scale;
     gil2opencv(boost::gil::view(m_prevLeftRectified), img1Prev);
@@ -287,18 +324,35 @@ void StixelsApplication::visualize()
                 cv::circle(img1Prev, p1tLin, 2, color, -1);
                 cv::circle(img1Current, p2bLin, 2, color, -1);
                 cv::circle(img1Current, p2tLin, 2, color, -1);
+                {
+                    const doppia::AbstractStixelMotionEstimator::stixels_motion_t & 
+                            corresp = mp_stixel_motion_estimator->get_stixels_motion();
+                    int32_t idx = corresp[i];
+                    if (idx >= 0) {
+                        const cv::Point2d & p1bLin = cv::Point2d(mp_prevStixels->at(idx).x, 
+                                                                 mp_prevStixels->at(idx).bottom_y);
+                        
+                        cv::circle(imgTracking, p1bLin, 2, color, -1);
+                        cv::line(imgTracking, p1bLin, p2bLin, color);
+                    }
+                    cv::circle(imgTracking, p2bLin, 2, color, -1);
+                }
             }
         }
         
         cv::resize(Lt0, scale, cv::Size(400, 600));
         scale.copyTo(output(cv::Rect(400, 0, 400, 600)));
-        
     }
+    
+    
     cv::resize(img1Prev, scale, cv::Size(400, 300));
     scale.copyTo(output(cv::Rect(0, 0, 400, 300)));
     
     cv::resize(img1Current, scale, cv::Size(400, 300));
     scale.copyTo(output(cv::Rect(0, 300, 400, 300)));
+    
+    cv::resize(imgTracking, scale, cv::Size(400, 300));
+    scale.copyTo(output(cv::Rect(800, 0, 400, 300)));
     
     cv::imshow("output", output);
         
