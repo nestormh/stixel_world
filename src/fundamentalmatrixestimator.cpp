@@ -54,10 +54,6 @@ bool FundamentalMatrixEstimator::findF(const cv::Mat& imgLt0, const cv::Mat& img
     FL = cv::findFundamentalMat(finalCorrespondences[0], finalCorrespondences[3], CV_FM_LMEDS);
     FR = cv::findFundamentalMat(finalCorrespondences[1], finalCorrespondences[2], CV_FM_LMEDS);
     
-    cout << finalCorrespondences.size() << endl;
-    cout << "FL avg err " << measureFundMatrixQuality(finalCorrespondences[0], finalCorrespondences[3], FL) << endl;
-    cout << "FR avg err " << measureFundMatrixQuality(finalCorrespondences[1], finalCorrespondences[2], FR) << endl;
-    
 //     waitForKey();
 //     visualize(imgLt0, imgRt0, imgLt1, imgRt1, initialPoints[0], points, finalCorrespondences);
     

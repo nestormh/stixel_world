@@ -1,4 +1,6 @@
-add_executable(testStixelWorld stixelstracker.cpp fundamentalmatrixestimator.cpp 
+add_executable(testStixelWorld 
+    stixelstracker.cpp 
+    fundamentalmatrixestimator.cpp 
     utils.cpp
     stixelsapplication.cpp 
     groundestimator.cpp 

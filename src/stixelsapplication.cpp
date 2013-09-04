@@ -26,6 +26,8 @@
 
 #include <fstream>
 
+#include <omp.h>
+
 using namespace stixel_world;
 
 StixelsApplication::StixelsApplication(const string& optionsFile)
@@ -126,15 +128,21 @@ void StixelsApplication::runStixelsApplication()
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
     
+    double startWallTime = omp_get_wtime();
     while (iterate()) {
         visualize();
         update();
+        cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
+        startWallTime = omp_get_wtime();
+        cout << "********************************" << endl;
     }
 }
 
 void StixelsApplication::update()
 {
 
+    const double & startWallTime = omp_get_wtime();
+    
     // Updating the rectified images
     const stixel_world::input_image_const_view_t & currLeft = mp_video_input->get_left_image();
     const stixel_world::input_image_const_view_t & currRight = mp_video_input->get_right_image();
@@ -149,10 +157,14 @@ void StixelsApplication::update()
     std::copy(mp_stixel_world_estimator->get_stixels().begin(), 
                 mp_stixel_world_estimator->get_stixels().end(), 
                 mp_prevStixels->begin());
+    
+    cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
 }
 
 bool StixelsApplication::iterate()
 {
+    const double & startWallTime = omp_get_wtime();
+    
     if (! mp_video_input->next_frame())
         return false;
                 
@@ -160,28 +172,36 @@ bool StixelsApplication::iterate()
                         left_view(mp_video_input->get_left_image()),
                         right_view(mp_video_input->get_right_image());    
             
+    const double & startWallTimeStixels = omp_get_wtime();
     mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
     mp_stixel_world_estimator->compute();
+    cout << "Time for stixels generation: " << omp_get_wtime() - startWallTimeStixels << endl;
     
-    mp_stixel_motion_estimator->set_new_rectified_image(left_view);
-        
     if (! rectifyPolar()) {
         // TODO: Do something in this case
         return true;
     }
+
+    const double & startWallTimeStixelsMotion = omp_get_wtime();
+    mp_stixel_motion_estimator->set_new_rectified_image(left_view);
     
     mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
     
     if(mp_video_input->get_current_frame_number() > m_initialFrame)
         mp_stixel_motion_estimator->compute();
+    cout << "Time for stixels motion: " << omp_get_wtime() - startWallTimeStixelsMotion << endl;
     
-    transformStixels();
+//     transformStixels();
+    
+    cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
     return true;
 }
 
 bool StixelsApplication::rectifyPolar()
 {
+    const double & startWallTime = omp_get_wtime();
+    
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return true;
     
@@ -261,6 +281,8 @@ bool StixelsApplication::rectifyPolar()
 //     opencv2gil(Lt1, viewLt1);
 //     opencv2gil(Rt1, viewRt1);
         
+    cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
+    
     return true;
 }
 
@@ -408,6 +430,8 @@ void StixelsApplication::visualize2()
 
 void StixelsApplication::visualize()
 {
+    const double & startWallTime = omp_get_wtime();
+    
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return;
     
@@ -441,6 +465,8 @@ void StixelsApplication::visualize()
     imgCurrent.copyTo(output(cv::Rect(imgPrev.cols, 0, imgCurrent.cols, imgCurrent.rows)));
     
     cv::imshow("output", output);
+    
+    cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
     waitForKey();
 }

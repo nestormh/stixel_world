@@ -37,17 +37,23 @@ public:
     void compute();
 
 protected:    
+    static const uint8_t MAX_DISPARITY = 128;
     
     void compute_motion_cost_matrix();
     void transform_stixels_polar();
     cv::Point2d get_polar_point(const cv::Mat & mapX, const cv::Mat & mapY, const Stixel stixel);
+    uint32_t compute_maximum_pixelwise_motion_for_stixel( const Stixel& stixel );
+    void compute_maximum_pixelwise_motion_for_stixel_lut();
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
+    Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
     
     stixels_t m_previous_stixels_polar;
     stixels_t m_current_stixels_polar;
+    
+    double m_checkTime[100];
 };
 }
 
