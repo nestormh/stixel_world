@@ -20,21 +20,35 @@
 
 #include "stereo_matching/stixels/motion/DummyStixelMotionEstimator.hpp"
 #include "Eigen/Core"
+#include <opencv2/opencv.hpp>
+#include "polarcalibration.h"
+#include <stixel_world_lib.hpp>
 
 using namespace doppia;
 
+namespace stixel_world {
+    
 class StixelsTracker : public DummyStixelMotionEstimator
 {
 public:    
     StixelsTracker(const boost::program_options::variables_map &options,
-                    const MetricStereoCamera &camera, int stixels_width);
+                    const MetricStereoCamera &camera, int stixels_width,
+                   boost::shared_ptr<PolarCalibration> p_polarCalibration);
     void compute();
 
 protected:    
     
     void compute_motion_cost_matrix();
+    void transform_stixels_polar();
+    cv::Point2d get_polar_point(const cv::Mat & mapX, const cv::Mat & mapY, const Stixel stixel);
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
+    
+    boost::shared_ptr<PolarCalibration> mp_polarCalibration;
+    
+    stixels_t m_previous_stixels_polar;
+    stixels_t m_current_stixels_polar;
 };
+}
 
 #endif // STIXELSTRACKER_H

@@ -49,7 +49,8 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
     
     mp_stixel_motion_estimator.reset( 
             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
-                                                mp_stixel_world_estimator->get_stixel_width() ) );
+                                                mp_stixel_world_estimator->get_stixel_width(),
+                                                mp_polarCalibration) );
         
     return;
 }
@@ -169,9 +170,13 @@ bool StixelsApplication::iterate()
         return true;
     }
     
+    mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
+    
     if(mp_video_input->get_current_frame_number() > m_initialFrame)
         mp_stixel_motion_estimator->compute();
-        
+    
+    transformStixels();
+    
     return true;
 }
 
@@ -206,28 +211,55 @@ bool StixelsApplication::rectifyPolar()
         return false;
     }
     
-    transformStixels();
+//     transformStixels();
+    
+//     // NOTE: Just for debugging
+//     {
+//         vector<cv::Point2d> oldPoints1(mp_stixel_world_estimator->get_stixels().size());
+//         vector<cv::Point2d> oldPoints2(mp_stixel_world_estimator->get_stixels().size());
+//         for (uint32_t i = 0; i < mp_prevStixels->size(); i++) {
+//             oldPoints1[i] = cv::Point2d((*mp_prevStixels)[i].x, 
+//                                         (*mp_prevStixels)[i].bottom_y);
+//         }
+//         for (uint32_t i = 0; i < mp_stixel_world_estimator->get_stixels().size(); i++) {
+//             oldPoints2[i] = cv::Point2d(mp_stixel_world_estimator->get_stixels()[i].x, 
+//                                         mp_stixel_world_estimator->get_stixels()[i].bottom_y);
+//         }
+//         
+//         vector<cv::Point2d> newPoints1a, newPoints2a;
+//         mp_polarCalibration->transformPoints(oldPoints1, newPoints1a, 1);
+//         mp_polarCalibration->transformPoints(oldPoints2, newPoints2a, 2);
+//         
+//         vector<cv::Point2d> newPoints1b, newPoints2b;
+//         mp_polarCalibration->transformPoints(FL, correspondences[0], correspondences[3], currLeft.size(), 
+//                                              oldPoints1, oldPoints2, newPoints1b, newPoints2b);
+//         
+//         for (uint32_t i = 0; i < oldPoints1.size(); i++) {
+//             cout << newPoints1a[i] << " -- " << newPoints1b[i] << " ==== " << cv::norm(newPoints1a[i] - newPoints1b[i]) << endl;
+//         }
+//     }
+//     // NOTE: end of note
     
     // TODO: Remove, this is just for visualization
-    cv::Mat Lt0, Rt0, Lt1, Rt1;
-    
-    mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Lt0, Lt1);
-    mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Rt0, Rt1);
-    
-    m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
-    m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
-    m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
-    m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
-    
-    boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
-    boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
-    boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
-    boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
-    
-    opencv2gil(Lt0, viewLt0);
-    opencv2gil(Rt0, viewRt0);
-    opencv2gil(Lt1, viewLt1);
-    opencv2gil(Rt1, viewRt1);
+//     cv::Mat Lt0, Rt0, Lt1, Rt1;
+//     
+//     mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Lt0, Lt1);
+//     mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Rt0, Rt1);
+//     
+//     m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
+//     m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
+//     m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
+//     m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
+//     
+//     boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
+//     boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
+//     boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
+//     boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
+//     
+//     opencv2gil(Lt0, viewLt0);
+//     opencv2gil(Rt0, viewRt0);
+//     opencv2gil(Lt1, viewLt1);
+//     opencv2gil(Rt1, viewRt1);
         
     return true;
 }
@@ -255,8 +287,8 @@ void StixelsApplication::transformStixels()
     
     mp_polarCalibration->transformPoints(basePointsLt0, basePointsTransfLt0, 1);
     mp_polarCalibration->transformPoints(topPointsLt0, topPointsTransfLt0, 1);
-    mp_polarCalibration->transformPoints(basePointsLt1, basePointsTransfLt1, 1);
-    mp_polarCalibration->transformPoints(topPointsLt1, topPointsTransfLt1, 1);
+//     mp_polarCalibration->transformPoints(basePointsLt1, basePointsTransfLt1, 1);
+//     mp_polarCalibration->transformPoints(topPointsLt1, topPointsTransfLt1, 1);
     
     //TODO: Use stixel_t as data type. Then store them into a global variable, so previous transformed stixels
     // are not calculated again. Change this in the visualization part
@@ -281,7 +313,7 @@ void drawLine(cv::Mat & img, const cv::Point2d & p1,
     }
 }
 
-void StixelsApplication::visualize()
+void StixelsApplication::visualize2()
 {
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return;
@@ -374,3 +406,41 @@ void StixelsApplication::visualize()
     waitForKey();
 }
 
+void StixelsApplication::visualize()
+{
+    if (mp_video_input->get_current_frame_number() == m_initialFrame)
+        return;
+    
+    cv::Mat imgCurrent, imgPrev;
+    gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), imgCurrent);
+    gil2opencv(boost::gil::view(m_prevLeftRectified), imgPrev);
+    
+    stixels_t prevStixels = mp_stixel_motion_estimator->get_previous_stixels();
+    stixels_t currStixels = mp_stixel_motion_estimator->get_current_stixels();
+    AbstractStixelMotionEstimator::stixels_motion_t corresp = mp_stixel_motion_estimator->get_stixels_motion();
+    
+    for (uint32_t i = 0; i < prevStixels.size(); i++) {
+        const cv::Point2d p1a(prevStixels[i].x, prevStixels[i].bottom_y);
+        const cv::Point2d p1b(prevStixels[corresp[i]].x, prevStixels[corresp[i]].bottom_y);
+        const cv::Point2d p2(currStixels[i].x, currStixels[i].bottom_y);
+        
+        if (corresp[i] < 0)
+            continue;
+        
+        const cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+        
+        cv::circle(imgPrev, p1a, 1, color);
+        
+        cv::line(imgCurrent, p1b, p2, color);
+        
+        cv::circle(imgCurrent, p1b, 1, color);
+    }
+    
+    cv::Mat output(m_prevLeftRectified.height(), 2 * m_prevLeftRectified.width(), CV_8UC3);
+    imgPrev.copyTo(output(cv::Rect(0, 0, imgPrev.cols, imgPrev.rows)));
+    imgCurrent.copyTo(output(cv::Rect(imgPrev.cols, 0, imgCurrent.cols, imgCurrent.rows)));
+    
+    cv::imshow("output", output);
+    
+    waitForKey();
+}

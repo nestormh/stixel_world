@@ -46,12 +46,13 @@ private:
     bool iterate();
     void update();
     void visualize();
+    void visualize2();
     bool rectifyPolar();
     void transformStixels();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
-    boost::shared_ptr<doppia::AbstractStixelMotionEstimator> mp_stixel_motion_estimator;
+    boost::shared_ptr<StixelsTracker> mp_stixel_motion_estimator;
     
 //     doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;

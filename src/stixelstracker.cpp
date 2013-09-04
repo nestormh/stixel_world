@@ -20,19 +20,60 @@
 #include "video_input/MetricStereoCamera.hpp"
 
 using namespace std;
+using namespace stixel_world;
 
 const float MIN_FLOAT_DISPARITY = 0.8f;
 
+
 StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::variables_map& options, 
-                                               const MetricStereoCamera& camera, int stixels_width) :
-                                               DummyStixelMotionEstimator(options, camera, stixels_width)
+                                               const MetricStereoCamera& camera, int stixels_width,
+                                               boost::shared_ptr<PolarCalibration> p_polarCalibration) :
+                                               DummyStixelMotionEstimator(options, camera, stixels_width),
+                                               mp_polarCalibration(p_polarCalibration)
 { 
     m_stixelsPolarDistMatrix = Eigen::MatrixXf::Zero( motion_cost_matrix.rows(), motion_cost_matrix.cols() ); // Matrix is initialized with 0.
+}
+
+void StixelsTracker::transform_stixels_polar()
+{
+    cv::Mat mapXprev, mapYprev, mapXcurr, mapYcurr;
+    mp_polarCalibration->getInverseMaps(mapXprev, mapYprev, 1);
+    mp_polarCalibration->getInverseMaps(mapXcurr, mapYcurr, 2);
+    
+    m_previous_stixels_polar.clear();
+    m_current_stixels_polar.clear();
+    
+    m_previous_stixels_polar.resize(previous_stixels_p->size());
+    m_current_stixels_polar.resize(current_stixels_p->size());
+    
+    copy(previous_stixels_p->begin(), previous_stixels_p->end(), m_previous_stixels_polar.begin());
+    copy(current_stixels_p->begin(), current_stixels_p->end(), m_current_stixels_polar.begin());
+    
+    for (stixels_t::iterator it = m_previous_stixels_polar.begin(); it != m_previous_stixels_polar.end(); it++) {
+        const cv::Point2d newPos(mapXprev.at<float>(it->bottom_y, it->x),
+                                 mapYprev.at<float>(it->bottom_y, it->x));
+        it->x = newPos.x;
+        it->bottom_y = newPos.y;
+    }
+    
+    for (stixels_t::iterator it = m_current_stixels_polar.begin(); it != m_current_stixels_polar.end(); it++) {
+        const cv::Point2d newPos(mapXcurr.at<float>(it->bottom_y, it->x),
+                                 mapYcurr.at<float>(it->bottom_y, it->x));
+        it->x = newPos.x;
+        it->bottom_y = newPos.y;
+    }
+}
+
+cv::Point2d StixelsTracker::get_polar_point(const cv::Mat& mapX, const cv::Mat& mapY, const Stixel stixel)
+{
+    return cv::Point2d(mapX.at<float>(stixel.bottom_y, stixel.x),
+                       mapY.at<float>(stixel.bottom_y, stixel.x));
 }
 
 
 void StixelsTracker::compute()
 {
+//     transform_stixels_polar();
     compute_motion_cost_matrix();
     compute_motion();
     update_stixel_tracks_image();
@@ -45,12 +86,22 @@ void StixelsTracker::compute_motion_cost_matrix()
     const float maximum_depth_difference = 1.0;
     
     const float maximum_allowed_real_height_difference = 0.5f;
-    const float alpha = 0.3;
+    const float maximum_allowed_polar_distance = 50.0f;
+    
+    const float sad_factor = 0.3; // SAD factor
+    const float height_factor = 0.7; // height factor
+    const float polar_dist_factor = 0.0; // polar dist factor
+    
+    assert((sad_factor + height_factor + polar_dist_factor) == 1.0);
     
     const float maximum_real_motion = maximum_pedestrian_speed / video_frame_rate;
     
     const unsigned int number_of_current_stixels = current_stixels_p->size();
     const unsigned int number_of_previous_stixels = previous_stixels_p->size();
+    
+    cv::Mat mapXprev, mapYprev, mapXcurr, mapYcurr;
+    mp_polarCalibration->getInverseMaps(mapXprev, mapYprev, 1);
+    mp_polarCalibration->getInverseMaps(mapXcurr, mapYcurr, 2);
     
     motion_cost_matrix.fill( 0.f );
     pixelwise_sad_matrix.fill( 0.f );
@@ -65,6 +116,7 @@ void StixelsTracker::compute_motion_cost_matrix()
     for( unsigned int s_current = 0; s_current < number_of_current_stixels; ++s_current )
     {
         const Stixel& current_stixel = ( *current_stixels_p )[ s_current ];
+        const cv::Point2d current_polar = get_polar_point(mapXcurr, mapYcurr, current_stixel);
         
         const unsigned int stixel_horizontal_padding = compute_stixel_horizontal_padding( current_stixel );
         
@@ -85,6 +137,7 @@ void StixelsTracker::compute_motion_cost_matrix()
             for( unsigned int s_prev = 0; s_prev < number_of_previous_stixels; ++s_prev )
             {
                 const Stixel& previous_stixel = ( *previous_stixels_p )[ s_prev ];
+                const cv::Point2d previous_polar = get_polar_point(mapXprev, mapYprev, previous_stixel);
                 
                 if( previous_stixel.x - ( previous_stixel.width - 1 ) / 2 - stixel_horizontal_padding >= 0 &&
                     previous_stixel.x + ( previous_stixel.width - 1 ) / 2 + stixel_horizontal_padding < previous_image_view.width() /*&&
@@ -108,21 +161,27 @@ void StixelsTracker::compute_motion_cost_matrix()
                         {
                             float pixelwise_sad;
                             float real_height_difference;
+                            float polar_distance;
                             
                             if( current_stixel.type != Stixel::Occluded && previous_stixel.type != Stixel::Occluded )
                             {
                                 pixelwise_sad = compute_pixelwise_sad( current_stixel, previous_stixel, current_image_view, previous_image_view, stixel_horizontal_padding );
                                 real_height_difference = fabs( current_stixel_real_height - compute_stixel_real_height( previous_stixel ) );
+                                polar_distance = cv::norm(previous_polar - current_polar);
                             }
                             else
                             {
                                 pixelwise_sad = maximum_pixel_value;
                                 real_height_difference = maximum_allowed_real_height_difference;
+                                polar_distance = maximum_allowed_polar_distance;
                             }
                             
                             pixelwise_sad_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = pixelwise_sad;
                             real_height_differences_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) =
-                            std::min( 1.0f, real_height_difference / maximum_allowed_real_height_difference );
+                                    std::min( 1.0f, real_height_difference / maximum_allowed_real_height_difference );
+                            
+                            m_stixelsPolarDistMatrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = 
+                                    std::min( 1.0f, polar_distance / maximum_allowed_polar_distance );
                             
                             motion_cost_assignment_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = true;
                             real_motion_vectors_matrix[ s_current ][ pixelwise_motion + maximum_possible_motion_in_pixels ] = real_motion;
@@ -140,8 +199,13 @@ void StixelsTracker::compute_motion_cost_matrix()
     //    real_height_differences_matrix = real_height_differences_matrix * ( float ( maximum_pixel_value ) / maximum_real_height_difference );
     real_height_differences_matrix = real_height_differences_matrix * maximum_pixel_value;
     
+    m_stixelsPolarDistMatrix = m_stixelsPolarDistMatrix * maximum_pixel_value;
+    
     /// Fill in the motion cost matrix
-    motion_cost_matrix = alpha * pixelwise_sad_matrix + ( 1 - alpha ) * real_height_differences_matrix; // [0, 255]
+//     motion_cost_matrix = alpha * pixelwise_sad_matrix + ( 1 - alpha ) * real_height_differences_matrix; // [0, 255]
+    motion_cost_matrix = sad_factor * pixelwise_sad_matrix + 
+                         height_factor * real_height_differences_matrix +
+                         polar_dist_factor * m_stixelsPolarDistMatrix;
     
     const float maximum_cost_matrix_element = motion_cost_matrix.maxCoeff(); // Minimum is 0 by definition
     
