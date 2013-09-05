@@ -23,7 +23,7 @@
 
 namespace stixel_world {
     extern "C" {
-        uint8_t waitForKey();
+        uint8_t waitForKey(uint32_t time = 0);
     };
 
     template <class T>

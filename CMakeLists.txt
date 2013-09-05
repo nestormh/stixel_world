@@ -7,7 +7,8 @@ project(StixelWorld)
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frounding-math")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -unroll-loops -march=native")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -unroll-loops -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -march=native")
 set(POLAR_CALIBRATION_PATH "/home/nestor/Dropbox/KULeuven/projects/PolarCalibration/src/")
 set(POLAR_CALIBRATION_INCLUDE_PATH ${POLAR_CALIBRATION_PATH})
 set(POLAR_CALIBRATION_SRC 

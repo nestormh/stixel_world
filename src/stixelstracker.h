@@ -35,6 +35,9 @@ public:
                     const MetricStereoCamera &camera, int stixels_width,
                    boost::shared_ptr<PolarCalibration> p_polarCalibration);
     void compute();
+    
+    void set_motion_cost_factors(const float & sad_factor, const float & height_factor, const float & polar_dist_factor);
+    void drawTracker(cv::Mat & img);
 
 protected:    
     static const uint8_t MAX_DISPARITY = 128;
@@ -44,6 +47,7 @@ protected:
     cv::Point2d get_polar_point(const cv::Mat & mapX, const cv::Mat & mapY, const Stixel stixel);
     uint32_t compute_maximum_pixelwise_motion_for_stixel( const Stixel& stixel );
     void compute_maximum_pixelwise_motion_for_stixel_lut();
+    void updateTracker();
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
@@ -53,7 +57,12 @@ protected:
     stixels_t m_previous_stixels_polar;
     stixels_t m_current_stixels_polar;
     
-    double m_checkTime[100];
+    float m_sad_factor; // SAD factor
+    float m_height_factor; // height factor
+    float m_polar_dist_factor; // polar dist factor
+    
+    typedef vector < stixels_t > t_tracker;
+    t_tracker m_tracker;
 };
 }
 

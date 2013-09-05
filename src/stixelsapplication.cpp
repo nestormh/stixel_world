@@ -53,6 +53,7 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
                                                 mp_stixel_world_estimator->get_stixel_width(),
                                                 mp_polarCalibration) );
+    mp_stixel_motion_estimator->set_motion_cost_factors(0.3f, 0.7f, 0.0f);
         
     return;
 }
@@ -124,6 +125,7 @@ boost::program_options::variables_map StixelsApplication::parseOptionsFile(const
 void StixelsApplication::runStixelsApplication()
 {
     cv::namedWindow("output");
+    cv::moveWindow("output", 1366, 0);
     
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
@@ -167,31 +169,25 @@ bool StixelsApplication::iterate()
     
     if (! mp_video_input->next_frame())
         return false;
-                
+    
     doppia::AbstractVideoInput::input_image_view_t
                         left_view(mp_video_input->get_left_image()),
-                        right_view(mp_video_input->get_right_image());    
+                        right_view(mp_video_input->get_right_image());  
             
-    const double & startWallTimeStixels = omp_get_wtime();
     mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
     mp_stixel_world_estimator->compute();
-    cout << "Time for stixels generation: " << omp_get_wtime() - startWallTimeStixels << endl;
     
     if (! rectifyPolar()) {
         // TODO: Do something in this case
         return true;
     }
 
-    const double & startWallTimeStixelsMotion = omp_get_wtime();
     mp_stixel_motion_estimator->set_new_rectified_image(left_view);
     
     mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
     
     if(mp_video_input->get_current_frame_number() > m_initialFrame)
         mp_stixel_motion_estimator->compute();
-    cout << "Time for stixels motion: " << omp_get_wtime() - startWallTimeStixelsMotion << endl;
-    
-//     transformStixels();
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
@@ -425,7 +421,7 @@ void StixelsApplication::visualize2()
 //     }
     // end of NOTE
     
-    waitForKey();
+    waitForKey(20);
 }
 
 void StixelsApplication::visualize()
@@ -461,6 +457,7 @@ void StixelsApplication::visualize()
     }
     
     cv::Mat output(m_prevLeftRectified.height(), 2 * m_prevLeftRectified.width(), CV_8UC3);
+    mp_stixel_motion_estimator->drawTracker(imgPrev);
     imgPrev.copyTo(output(cv::Rect(0, 0, imgPrev.cols, imgPrev.rows)));
     imgCurrent.copyTo(output(cv::Rect(imgPrev.cols, 0, imgCurrent.cols, imgCurrent.rows)));
     
