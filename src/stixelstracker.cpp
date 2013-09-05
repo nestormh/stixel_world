@@ -306,8 +306,11 @@ void StixelsTracker::updateTracker()
     if (m_tracker.size() == 0) {
         m_tracker.resize(currStixels->size());
         for (uint32_t i = 0; i < currStixels->size(); i++) {
-            m_tracker[i].push_back(currStixels->at(i));
+            Stixel3d currStixel3d(currStixels->at(i));
+            currStixel3d.update3dcoords(stereo_camera);
+            m_tracker[i].push_back(currStixel3d);
         }
+        return;
     }
     
     t_tracker tmpTracker(m_tracker.size());
@@ -317,34 +320,82 @@ void StixelsTracker::updateTracker()
     
     for (uint32_t i = 0; i < currStixels->size(); i++) {
         if (corresp[i] >= 0.0f) {
+            Stixel3d currStixel3d(currStixels->at(i));
+            currStixel3d.update3dcoords(stereo_camera);
+            
             m_tracker[i] = tmpTracker[corresp[i]];
-            m_tracker[i].push_back(currStixels->at(i));
+            m_tracker[i].push_back(currStixel3d);
         }
     }
 }
 
-void StixelsTracker::drawTracker(cv::Mat& img)
+void StixelsTracker::projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d)
 {
-    gil2opencv(current_image_view, img);
+    const double maxDistZ = 20.0;
+    const double maxDistX = maxDistZ / 2.0;
     
+    // v axis corresponds to Z
+    point2d.y = imgTop.rows - ((imgTop.rows - 10) * min(maxDistZ, point3d.z) / maxDistZ);
+    
+    // u axis corresponds to X
+    point2d.x = ((imgTop.cols / 2.0) * min(maxDistX, point3d.x) / maxDistX) + imgTop.cols / 2;
+}
+
+void StixelsTracker::drawTracker(cv::Mat& img, cv::Mat & imgTop)
+{
+    
+    if (m_color.size() == 0) {
+        m_color.resize(current_stixels_p->size());
+        
+        for (vector<cv::Scalar>::iterator it = m_color.begin(); it != m_color.end(); it++) {
+            *it = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+        }
+    }
+    
+    gil2opencv(current_image_view, img);
+    imgTop = cv::Mat::zeros(img.rows / 2, img.cols / 2, CV_8UC3);
 
     cv::rectangle(img, cv::Point2d(0, 0), cv::Point2d(img.cols - 1, 20), cv::Scalar::all(0), -1);
+
     stringstream oss;
     oss << "SAD factor = " << m_sad_factor << ", Height factor = " << m_height_factor << ", Polar distance factor  = " << m_polar_dist_factor;
     cv::putText(img, oss.str(), cv::Point2d(5, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(255));
+    cv::putText(imgTop, oss.str(), cv::Point2d(2, 7), cv::FONT_HERSHEY_SIMPLEX, 0.25, cv::Scalar::all(255));
     
-    for (t_tracker::iterator it = m_tracker.begin(); it != m_tracker.end(); it++) {
-        const cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+    
+    vector<cv::Scalar>::iterator itColor = m_color.begin();
+    for (t_tracker::iterator it = m_tracker.begin(); it != m_tracker.end(); it++, itColor++) {
+        const cv::Scalar color = *itColor;
         if (it->size() != 0) {
-            const Stixel lastStixel = it->at(it->size() - 1);
+            const Stixel3d lastStixel = it->at(it->size() - 1);
             cv::circle(img, cv::Point2d(lastStixel.x, lastStixel.bottom_y), 1, color);
+            cv::circle(img, cv::Point2d(lastStixel.x, lastStixel.top_y), 1, color);
+            
+            cv::Point2d currentPointTopView;
+            projectPointInTopView(lastStixel.bottom3d, imgTop, currentPointTopView);
+            cv::circle(imgTop, currentPointTopView, 1, color);
         
-            cv::Point2d lastPoint(it->at(0).x, it->at(0).bottom_y);
-            for (stixels_t::iterator it2 = it->begin() + 1; it2 != it->end(); it2++) {
-                const cv::Point2d currPoint(it2->x, it2->bottom_y);
-                
-                cv::line(img, lastPoint, currPoint, color);
-                lastPoint = currPoint;
+            cv::Point2d lastPointBottom = it->at(0).getBottom2d<cv::Point2d>();
+            cv::Point2d lastPointTop = it->at(0).getTop2d<cv::Point2d>();
+            cv::Point2d lastPointTopView;
+            projectPointInTopView(it->at(0).bottom3d, imgTop, lastPointTopView);
+            cv::circle(imgTop, lastPointTopView, 1, color);
+            for (stixels3d_t::iterator it2 = it->begin(); it2 != it->end(); it2++) {
+                const cv::Point2d currPointBottom = it2->getBottom2d<cv::Point2d>();
+                const cv::Point2d currPointTop = it2->getTop2d<cv::Point2d>();
+                cv::Point2d currPointTopView;
+                projectPointInTopView(it2->bottom3d, imgTop, currPointTopView);
+                if ((currPointBottom.x > 5) && (currPointBottom.x < current_image_view.width() - 5)) {
+                    cv::line(img, lastPointBottom, currPointBottom, color);
+                    cv::line(img, lastPointTop, currPointTop, color);
+                    
+//                     if (cv::norm(it2->bottom3d - (it2-1)->bottom3d) < 5.0) {
+                        cv::line(imgTop, lastPointTopView, currPointTopView, color);
+//                     }
+                }                
+                lastPointBottom = currPointBottom;
+                lastPointTop = currPointTop;
+                lastPointTopView = currPointTopView;
             }
         }
     }

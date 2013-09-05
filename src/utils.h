@@ -58,4 +58,26 @@ namespace stixel_world {
     }
 }
 
+// void addLineToPointCloud(const PointType& p1, const PointType& p2, 
+//                                           const uint8_t & r, const uint8_t & g, const uint8_t  & b,
+//                                           PointCloudTypeExt::Ptr & linesPointCloud, double zOffset) {
+//     
+//     double dist = pcl::euclideanDistance(p1, p2);
+//     
+//     const uint32_t nSamples = (uint32_t)(ceil(dist / 0.02));
+//     
+//     for (uint32_t i = 0; i <= nSamples; i++) {
+//         pcl::PointXYZRGB p;
+//         p.x = p1.x + ((double)i / nSamples) * (p2.x - p1.x);
+//         p.y = p1.y + ((double)i / nSamples) * (p2.y - p1.y);
+//         p.z = zOffset;
+//         
+//         p.r = r;
+//         p.g = g;
+//         p.b = b;
+//         
+//         linesPointCloud->push_back(p);
+//     } 
+//                                           }
+
 #endif

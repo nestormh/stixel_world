@@ -23,6 +23,7 @@
 #include <opencv2/opencv.hpp>
 #include "polarcalibration.h"
 #include <stixel_world_lib.hpp>
+#include "stixel3d.h"
 
 using namespace doppia;
 
@@ -37,7 +38,7 @@ public:
     void compute();
     
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, const float & polar_dist_factor);
-    void drawTracker(cv::Mat & img);
+    void drawTracker(cv::Mat & img, cv::Mat & imgTop);
 
 protected:    
     static const uint8_t MAX_DISPARITY = 128;
@@ -48,6 +49,8 @@ protected:
     uint32_t compute_maximum_pixelwise_motion_for_stixel( const Stixel& stixel );
     void compute_maximum_pixelwise_motion_for_stixel_lut();
     void updateTracker();
+    
+    void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
@@ -61,8 +64,10 @@ protected:
     float m_height_factor; // height factor
     float m_polar_dist_factor; // polar dist factor
     
-    typedef vector < stixels_t > t_tracker;
+    typedef vector < stixels3d_t > t_tracker;
     t_tracker m_tracker;
+    
+    vector<cv::Scalar> m_color;
 };
 }
 

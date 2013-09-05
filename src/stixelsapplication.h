@@ -31,6 +31,8 @@
 #include "stereo_matching/stixels/motion/DummyStixelMotionEstimator.hpp"
 #include "stixelstracker.h"
 
+#include <boost/thread/thread.hpp>
+
 using namespace std;
 
 namespace stixel_world {
@@ -49,6 +51,7 @@ private:
     void visualize2();
     bool rectifyPolar();
     void transformStixels();
+//     void PCLViewerLoop();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
@@ -73,8 +76,6 @@ private:
     vector<cv::Point2d> basePointsTransfLt0, topPointsTransfLt0, basePointsTransfLt1, topPointsTransfLt1;
     
     uint32_t m_initialFrame;
-    
-    
 };
 
     

@@ -30,6 +30,7 @@
 
 using namespace stixel_world;
 
+
 StixelsApplication::StixelsApplication(const string& optionsFile)
 {
     m_options = parseOptionsFile(optionsFile);
@@ -54,7 +55,7 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
                                                 mp_stixel_world_estimator->get_stixel_width(),
                                                 mp_polarCalibration) );
     mp_stixel_motion_estimator->set_motion_cost_factors(0.3f, 0.7f, 0.0f);
-        
+            
     return;
 }
 
@@ -456,10 +457,13 @@ void StixelsApplication::visualize()
         cv::circle(imgCurrent, p1b, 1, color);
     }
     
-    cv::Mat output(m_prevLeftRectified.height(), 2 * m_prevLeftRectified.width(), CV_8UC3);
-    mp_stixel_motion_estimator->drawTracker(imgPrev);
+    cv::Mat output = cv::Mat::zeros(m_prevLeftRectified.height(), 2 * m_prevLeftRectified.width(), CV_8UC3);
+    cv::Mat topView;
+    mp_stixel_motion_estimator->drawTracker(imgPrev, topView);
     imgPrev.copyTo(output(cv::Rect(0, 0, imgPrev.cols, imgPrev.rows)));
-    imgCurrent.copyTo(output(cv::Rect(imgPrev.cols, 0, imgCurrent.cols, imgCurrent.rows)));
+    topView.copyTo(output(cv::Rect(imgPrev.cols, 0, topView.cols, topView.rows)));
+    
+//     imgCurrent.copyTo(output(cv::Rect(imgPrev.cols, 0, imgCurrent.cols, imgCurrent.rows)));
     
     cv::imshow("output", output);
     
@@ -467,3 +471,4 @@ void StixelsApplication::visualize()
     
     waitForKey();
 }
+
