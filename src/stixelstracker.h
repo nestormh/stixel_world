@@ -49,6 +49,7 @@ protected:
     uint32_t compute_maximum_pixelwise_motion_for_stixel( const Stixel& stixel );
     void compute_maximum_pixelwise_motion_for_stixel_lut();
     void updateTracker();
+    void getClusters();
     
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
@@ -68,6 +69,12 @@ protected:
     t_tracker m_tracker;
     
     vector<cv::Scalar> m_color;
+    
+    vector<int32_t> m_clusters;
+    vector < vector<int> > m_objects;
+    
+    double m_minAllowedObjectWidth;
+    double m_minDistBetweenClusters;
 };
 }
 

@@ -20,6 +20,18 @@
 #include "video_input/MetricStereoCamera.hpp"
 #include "video_input/MetricCamera.hpp"
 
+#include <pcl/ModelCoefficients.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
+
 #include "utils.h"
 
 using namespace std;
@@ -40,6 +52,9 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
     m_sad_factor = 0.3;
     m_height_factor = 0.0;
     m_polar_dist_factor = 0.7;
+    
+    m_minAllowedObjectWidth = 0.3;
+    m_minDistBetweenClusters = 0.3;
 }
 
 void StixelsTracker::set_motion_cost_factors(const float& sad_factor, const float& height_factor, const float& polar_dist_factor)
@@ -96,6 +111,7 @@ void StixelsTracker::compute()
     compute_motion();
     update_stixel_tracks_image();
     updateTracker();
+    getClusters();
     
     return;
 }
@@ -199,6 +215,9 @@ void StixelsTracker::compute_motion_cost_matrix()
                                     std::min( 1.0f, polar_distance / maximum_allowed_polar_distance );
                             
                             motion_cost_assignment_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = true;
+                            
+                            if (polar_distance < 5.0)
+                                motion_cost_assignment_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = false;
                         }
                     }
                 }
@@ -319,12 +338,79 @@ void StixelsTracker::updateTracker()
     m_tracker.resize(currStixels->size());
     
     for (uint32_t i = 0; i < currStixels->size(); i++) {
-        if (corresp[i] >= 0.0f) {
-            Stixel3d currStixel3d(currStixels->at(i));
-            currStixel3d.update3dcoords(stereo_camera);
-            
+        if (corresp[i] >= 0) {
             m_tracker[i] = tmpTracker[corresp[i]];
-            m_tracker[i].push_back(currStixel3d);
+        }
+        Stixel3d currStixel3d(currStixels->at(i));
+        currStixel3d.update3dcoords(stereo_camera);
+        
+        m_tracker[i].push_back(currStixel3d);
+    }
+}
+
+void StixelsTracker::getClusters()
+{
+    pcl::PointCloud<pcl::PointXYZL>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZL>);
+    cloud->reserve(current_stixels_p->size());
+    
+    for (uint32_t i = 0; i < m_tracker.size(); i++) {
+        pcl::PointXYZL pointPCL;
+        if (stixels_motion[i] >= 0) {
+            const cv::Point3d & point = m_tracker[i][m_tracker[i].size() - 1].bottom3d;
+            pointPCL.x = point.x;
+            pointPCL.y = 0.0f; //point.y;
+            pointPCL.z = point.z;
+            pointPCL.label = 1;
+        }
+        cloud->push_back(pointPCL);
+    }
+    
+    // Creating the KdTree object for the search method of the extraction
+    pcl::search::KdTree<pcl::PointXYZL>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZL>);
+    tree->setInputCloud (cloud);
+    
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZL> ec;
+    ec.setClusterTolerance (m_minDistBetweenClusters);
+    ec.setMinClusterSize (3); 
+    ec.setMaxClusterSize (m_tracker.size());
+    ec.setSearchMethod (tree);
+    ec.setInputCloud (cloud);
+    ec.extract (cluster_indices);
+
+    m_clusters.clear();
+    m_clusters.resize(m_tracker.size());
+
+    m_objects.clear();
+    m_objects.reserve(cluster_indices.size());
+    
+    uint32_t clusterIdx = 0;
+    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it, ++clusterIdx)
+    {
+        const int32_t & idxBegin = it->indices[0];
+        const int32_t & idxEnd = it->indices[it->indices.size() - 1];
+        const Stixel3d & stixelBegin = m_tracker[idxBegin][m_tracker[idxBegin].size() - 1];
+        const Stixel3d & stixelEnd = m_tracker[idxEnd][m_tracker[idxEnd].size() - 1];
+        
+        const double clusterWidth = stixelEnd.bottom3d.x - stixelBegin.bottom3d.x; 
+
+        uint32_t trackLenght = 0;
+        for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); pit++) {
+            if ((cloud->at(*pit).label == 0) || (clusterWidth < m_minAllowedObjectWidth)) {
+                m_clusters[*pit] = -1;
+            } else {
+                m_clusters[*pit] = clusterIdx;
+                if (m_tracker[*pit].size() > trackLenght)
+                    trackLenght = m_tracker[*pit].size();
+            }
+        }
+
+        if ((clusterWidth > m_minAllowedObjectWidth) && 
+            (cloud->at(it->indices[0]).label != 0) && (trackLenght > 2)) {
+            
+            vector <int> object(it->indices.size());
+            copy(it->indices.begin(), it->indices.end(), object.begin());
+            m_objects.push_back(object);
         }
     }
 }
@@ -347,56 +433,51 @@ void StixelsTracker::drawTracker(cv::Mat& img, cv::Mat & imgTop)
     if (m_color.size() == 0) {
         m_color.resize(current_stixels_p->size());
         
-        for (vector<cv::Scalar>::iterator it = m_color.begin(); it != m_color.end(); it++) {
-            *it = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+        uint32_t division = m_color.size() / 3;
+        for (uint32_t i = 1; i <= m_color.size(); i++) {
+            m_color[i - 1] = cv::Scalar((i * 50) % 256, (i * 100) % 256, (i * 200) % 256);
         }
+        
     }
     
     gil2opencv(current_image_view, img);
-    imgTop = cv::Mat::zeros(img.rows / 2, img.cols / 2, CV_8UC3);
-
+    imgTop = cv::Mat::zeros(img.rows, img.cols, CV_8UC3);
+    
     cv::rectangle(img, cv::Point2d(0, 0), cv::Point2d(img.cols - 1, 20), cv::Scalar::all(0), -1);
-
+    
     stringstream oss;
     oss << "SAD factor = " << m_sad_factor << ", Height factor = " << m_height_factor << ", Polar distance factor  = " << m_polar_dist_factor;
     cv::putText(img, oss.str(), cv::Point2d(5, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(255));
     cv::putText(imgTop, oss.str(), cv::Point2d(2, 7), cv::FONT_HERSHEY_SIMPLEX, 0.25, cv::Scalar::all(255));
     
-    
-    vector<cv::Scalar>::iterator itColor = m_color.begin();
-    for (t_tracker::iterator it = m_tracker.begin(); it != m_tracker.end(); it++, itColor++) {
-        const cv::Scalar color = *itColor;
-        if (it->size() != 0) {
-            const Stixel3d lastStixel = it->at(it->size() - 1);
-            cv::circle(img, cv::Point2d(lastStixel.x, lastStixel.bottom_y), 1, color);
-            cv::circle(img, cv::Point2d(lastStixel.x, lastStixel.top_y), 1, color);
-            
-            cv::Point2d currentPointTopView;
-            projectPointInTopView(lastStixel.bottom3d, imgTop, currentPointTopView);
-            cv::circle(imgTop, currentPointTopView, 1, color);
+    uint32_t clusterIdx = 0;
+    for (vector < vector <int> >::iterator it = m_objects.begin(); it != m_objects.end(); it++, clusterIdx++) {
+        const cv::Scalar & color =  m_color[clusterIdx];
         
-            cv::Point2d lastPointBottom = it->at(0).getBottom2d<cv::Point2d>();
-            cv::Point2d lastPointTop = it->at(0).getTop2d<cv::Point2d>();
-            cv::Point2d lastPointTopView;
-            projectPointInTopView(it->at(0).bottom3d, imgTop, lastPointTopView);
-            cv::circle(imgTop, lastPointTopView, 1, color);
-            for (stixels3d_t::iterator it2 = it->begin(); it2 != it->end(); it2++) {
-                const cv::Point2d currPointBottom = it2->getBottom2d<cv::Point2d>();
-                const cv::Point2d currPointTop = it2->getTop2d<cv::Point2d>();
-                cv::Point2d currPointTopView;
-                projectPointInTopView(it2->bottom3d, imgTop, currPointTopView);
-                if ((currPointBottom.x > 5) && (currPointBottom.x < current_image_view.width() - 5)) {
-                    cv::line(img, lastPointBottom, currPointBottom, color);
-                    cv::line(img, lastPointTop, currPointTop, color);
-                    
-//                     if (cv::norm(it2->bottom3d - (it2-1)->bottom3d) < 5.0) {
-                        cv::line(imgTop, lastPointTopView, currPointTopView, color);
-//                     }
-                }                
-                lastPointBottom = currPointBottom;
-                lastPointTop = currPointTop;
-                lastPointTopView = currPointTopView;
+        cv::Point2d corner1(current_stixels_p->at(it->at(0)).x, current_stixels_p->at(it->at(0)).bottom_y);
+        cv::Point2d corner2(current_stixels_p->at(it->at(it->size() - 1)).x, current_stixels_p->at(it->at(it->size() - 1)).top_y);
+        
+        for (vector<int>::iterator it2 = it->begin(); it2 != it->end(); it2++) {
+            
+            stixels3d_t & track = m_tracker[*it2];
+            stixels3d_t::iterator itTrack = track.begin();
+            itTrack++;
+            for (; itTrack != track.end(); itTrack++) {
+                cv::line(img, itTrack->getBottom2d<cv::Point2d>(), (itTrack - 1)->getBottom2d<cv::Point2d>(), color);
+                
+                cv::Point2d p1Top, p2Top;
+                projectPointInTopView(itTrack->bottom3d, imgTop, p1Top);
+                projectPointInTopView((itTrack - 1)->bottom3d, imgTop, p2Top);
+                cv::line(imgTop, p1Top, p2Top, color);
             }
+            
+            if (current_stixels_p->at(*it2).bottom_y > corner1.y) 
+                corner1.y = current_stixels_p->at(*it2).bottom_y;
+            if (current_stixels_p->at(*it2).top_y < corner2.y) 
+                corner2.y = current_stixels_p->at(*it2).top_y;
         }
+        
+        cv::rectangle(img, corner1, corner2, color);
     }
+    cv::rectangle(imgTop, cv::Point2d(0, 0), cv::Point2d(imgTop.cols - 1, imgTop.rows - 1), cv::Scalar::all(255));
 }

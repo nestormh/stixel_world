@@ -30,7 +30,6 @@
 
 using namespace stixel_world;
 
-
 StixelsApplication::StixelsApplication(const string& optionsFile)
 {
     m_options = parseOptionsFile(optionsFile);
@@ -55,7 +54,26 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
                                                 mp_stixel_world_estimator->get_stixel_width(),
                                                 mp_polarCalibration) );
     mp_stixel_motion_estimator->set_motion_cost_factors(0.3f, 0.7f, 0.0f);
+    
+    // NOTE: This is just for fast tuning of the motion estimators
+//     mp_stixels_tests.resize(6);
+//     for (uint32_t i = 0; i < 6; i++) {
+//         mp_stixels_tests[i].reset( 
+//             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+//                                 mp_stixel_world_estimator->get_stixel_width(),
+//                                 mp_polarCalibration) );
+//     }
+//     mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f);
+//     mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f);
+    mp_stixels_tests[1]->set_motion_cost_factors(0.3f, 0.3f, 0.4f);
+    mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f);
+    mp_stixels_tests[3]->set_motion_cost_factors(0.5f, 0.0f, 0.5f);
+    mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.5f, 0.5f);
+    mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.5f, 0.0f);
+    // end of NOTE
             
+    m_waitTime = 20;
+    
     return;
 }
 
@@ -155,6 +173,9 @@ void StixelsApplication::update()
     
     mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
     
+    for (uint32_t i = 0; i < mp_stixels_tests.size(); i++)
+        mp_stixels_tests[i]->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
+    
     // Updating the stixels
     mp_prevStixels->resize(mp_stixel_world_estimator->get_stixels().size());
     std::copy(mp_stixel_world_estimator->get_stixels().begin(), 
@@ -184,11 +205,18 @@ bool StixelsApplication::iterate()
     }
 
     mp_stixel_motion_estimator->set_new_rectified_image(left_view);
-    
     mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
     
     if(mp_video_input->get_current_frame_number() > m_initialFrame)
         mp_stixel_motion_estimator->compute();
+    
+    for (uint32_t i = 0; i < mp_stixels_tests.size(); i++) {
+        mp_stixels_tests[i]->set_new_rectified_image(left_view);
+        mp_stixels_tests[i]->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
+        
+        if(mp_video_input->get_current_frame_number() > m_initialFrame)
+            mp_stixels_tests[i]->compute();
+    }
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
@@ -422,10 +450,10 @@ void StixelsApplication::visualize2()
 //     }
     // end of NOTE
     
-    waitForKey(20);
+    waitForKey(&m_waitTime);
 }
 
-void StixelsApplication::visualize()
+void StixelsApplication::visualize3()
 {
     const double & startWallTime = omp_get_wtime();
     
@@ -469,6 +497,54 @@ void StixelsApplication::visualize()
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
-    waitForKey();
+    waitForKey(&m_waitTime);
+}
+
+void StixelsApplication::visualize()
+{
+    if (mp_video_input->get_current_frame_number() == m_initialFrame)
+        return;
+
+    if (mp_stixels_tests.size() == 0) {
+        visualize3();
+        return;
+    }
+        
+    const double & startWallTime = omp_get_wtime();
+    
+    cv::Mat imgCurrent[6], topView[6];
+    gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), imgCurrent[0]);
+    mp_stixels_tests[0]->drawTracker(imgCurrent[0], topView[0]);
+    
+    cv::Size topSize = cv::Size(imgCurrent[0].cols / 2, imgCurrent[0].rows / 2);
+    cv::Mat output = cv::Mat::zeros(2 * imgCurrent[0].rows + topSize.height, 3 * m_prevLeftRectified.width(), CV_8UC3);
+    
+    cv::Mat topScaled;
+    cv::resize(topView[0], topScaled, topSize);
+    topScaled.copyTo(output(cv::Rect(0, 2 * imgCurrent[0].rows, topScaled.cols, topScaled.rows)));
+    
+    for (uint32_t i = 1; i < mp_stixels_tests.size(); i++) {
+        imgCurrent[0].copyTo(imgCurrent[i]);
+        imgCurrent[i] = cv::Mat(imgCurrent[0].rows, imgCurrent[0].cols, CV_8UC3);
+        mp_stixels_tests[i]->drawTracker(imgCurrent[i], topView[i]);
+        
+        cv::resize(topView[i], topScaled, topSize);
+        topScaled.copyTo(output(cv::Rect(topScaled.cols * i, 2 * imgCurrent[0].rows, topScaled.cols, topScaled.rows)));
+    }
+    
+    imgCurrent[0].copyTo(output(cv::Rect(0, 0, imgCurrent[0].cols, imgCurrent[0].rows)));
+    imgCurrent[1].copyTo(output(cv::Rect(imgCurrent[0].cols, 0, imgCurrent[1].cols, imgCurrent[1].rows)));
+    imgCurrent[2].copyTo(output(cv::Rect(2 * imgCurrent[0].cols, 0, imgCurrent[2].cols, imgCurrent[2].rows)));
+    imgCurrent[3].copyTo(output(cv::Rect(0, imgCurrent[0].rows, imgCurrent[3].cols, imgCurrent[3].rows)));
+    imgCurrent[4].copyTo(output(cv::Rect(imgCurrent[0].cols, imgCurrent[0].rows, imgCurrent[4].cols, imgCurrent[4].rows)));
+    imgCurrent[5].copyTo(output(cv::Rect(2 * imgCurrent[0].cols, imgCurrent[0].rows, imgCurrent[5].cols, imgCurrent[5].rows)));
+    
+    
+    cv::imshow("output", output);
+    
+    cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
+    
+    waitForKey(&m_waitTime);
+        
 }
 

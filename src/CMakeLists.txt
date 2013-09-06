@@ -18,12 +18,13 @@ add_executable(testStixelWorld
 include_directories(testStixelWorld
 #     GPULibSVM
     ${EIGEN3_INCLUDE_DIR}
-#     ${PCL_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}
     ${POLAR_CALIBRATION_INCLUDE_PATH}
 #     emon.a
 #     ${CUDA_INCLUDE_DIRS}
+    /usr/include/pcl-1.7  # This line is just to help kdevelop to index PCL includes (remove)
     /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/
     /home/nestor/Dropbox/KULeuven/projects/doppia/src/
     /home/nestor/Dropbox/KULeuven/projects/doppia/libs/
@@ -32,7 +33,7 @@ include_directories(testStixelWorld
 
 target_link_libraries(testStixelWorld
   ${EIGEN3_LIBRARIES}
-#   ${PCL_LIBRARIES}
+  ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
 #   ${CUDA_LIBRARIES}
   ${Boost_LIBRARIES}

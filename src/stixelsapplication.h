@@ -49,21 +49,18 @@ private:
     void update();
     void visualize();
     void visualize2();
+    void visualize3();
     bool rectifyPolar();
     void transformStixels();
-//     void PCLViewerLoop();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
     boost::shared_ptr<StixelsTracker> mp_stixel_motion_estimator;
     
-//     doppia::AbstractVideoInput::input_image_t m_currentLeft, m_currentRight;
+    vector< boost::shared_ptr<StixelsTracker> > mp_stixels_tests;
+    
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
     doppia::AbstractVideoInput::input_image_t m_polarLt0, m_polarRt0, m_polarLt1, m_polarRt1;
-    
-//     boost::gil::rgb8_view_t m_prevLeftRectified, m_prevRightRectified;
-//     stixel_world::input_image_const_view_t m_currentLeftRectified, m_currentRightRectified;
-//     stixel_world::input_image_const_view_t m_prevLeftRectified, m_prevRightRectified;
     
     boost::shared_ptr<stixels_t> mp_prevStixels;
     
@@ -76,6 +73,8 @@ private:
     vector<cv::Point2d> basePointsTransfLt0, topPointsTransfLt0, basePointsTransfLt1, topPointsTransfLt1;
     
     uint32_t m_initialFrame;
+    
+    uint32_t m_waitTime;
 };
 
     
