@@ -1,17 +1,18 @@
-add_executable(testStixelWorld 
-    stixel3d.cpp
+
+add_executable(testStixelWorld
+    doppia/stixel3d.cpp
     stixelstracker.cpp 
     fundamentalmatrixestimator.cpp 
     utils.cpp
     stixelsapplication.cpp 
-    groundestimator.cpp 
+#     doppia/groundestimator.cpp 
     rectification.cpp
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/AbstractStixelMotionEstimator.cpp
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/DummyStixelMotionEstimator.cpp
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/drawing/gil/colors.cpp
-#     doppia/GroundPlane.cpp
-#     doppia/IrlsLinesDetector.cpp
+    doppia/extendedfaststixelworldestimator.cpp 
+    doppia/extendedstixelworldestimatorfactory.cpp
+    doppia/extendedfastgroundplaneestimator.cpp
     main.cpp
+    
+    ${DOPPIA_CPP_FILES}
     ${POLAR_CALIBRATION_SRC}
 )
   
@@ -25,10 +26,11 @@ include_directories(testStixelWorld
 #     emon.a
 #     ${CUDA_INCLUDE_DIRS}
     /usr/include/pcl-1.7  # This line is just to help kdevelop to index PCL includes (remove)
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/
-    /home/nestor/Dropbox/KULeuven/projects/doppia/libs/
-    /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/
+    ${DOPPIA_INCLUDE_DIRS}
+#     /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/
+#     /home/nestor/Dropbox/KULeuven/projects/doppia/src/
+#     /home/nestor/Dropbox/KULeuven/projects/doppia/libs/
+#     /home/nestor/Dropbox/KULeuven/projects/doppia/src/stereo_matching/stixels/motion/
 )
 
 target_link_libraries(testStixelWorld
@@ -40,9 +42,8 @@ target_link_libraries(testStixelWorld
   ${PROTOBUF_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${SDL_LIBRARY}
-#   /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/build/libstixel_world_with_ui.so
-  /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/build/libstixel_world.so
   ${PNG_LIBRARIES}
+  ${DOPPIA_LIB}
 #   ${Boost_
 #   ${CGAL_CGAL_LIBRARY}
 #   ${GMP_LIBRARIES}

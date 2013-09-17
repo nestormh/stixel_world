@@ -22,8 +22,7 @@
 #include "Eigen/Core"
 #include <opencv2/opencv.hpp>
 #include "polarcalibration.h"
-#include <stixel_world_lib.hpp>
-#include "stixel3d.h"
+#include "doppia/stixel3d.h"
 
 using namespace doppia;
 
@@ -37,23 +36,33 @@ public:
                    boost::shared_ptr<PolarCalibration> p_polarCalibration);
     void compute();
     
-    void set_motion_cost_factors(const float & sad_factor, const float & height_factor, const float & polar_dist_factor);
+    void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
+                                 const float & polar_dist_factor, const float & polar_sad_factor);
     void drawTracker(cv::Mat & img, cv::Mat & imgTop);
+    void drawTracker(cv::Mat & img);
 
 protected:    
     static const uint8_t MAX_DISPARITY = 128;
     
+    void compute_static_stixels();
     void compute_motion_cost_matrix();
     void transform_stixels_polar();
-    cv::Point2d get_polar_point(const cv::Mat & mapX, const cv::Mat & mapY, const Stixel stixel);
+    cv::Point2d get_polar_point(const cv::Mat & mapX, const cv::Mat & mapY, const Stixel & stixel, const bool bottom = true);
+    cv::Point2d get_polar_point(const cv::Mat & prevMapX, const cv::Mat & prevMapY, 
+                                const cv::Mat & currPolar2LinearX, const cv::Mat & currPolar2LinearY, 
+                                const Stixel & stixel);
+    cv::Point2d get_polar_point(const cv::Mat& mapX, const cv::Mat& mapY, const cv::Point2d & point);
     uint32_t compute_maximum_pixelwise_motion_for_stixel( const Stixel& stixel );
     void compute_maximum_pixelwise_motion_for_stixel_lut();
     void updateTracker();
     void getClusters();
+    float compute_polar_SAD(const Stixel& stixel1, const Stixel& stixel2);
+    void draw_polar_SAD(cv::Mat & img, const Stixel& stixel1, const Stixel& stixel2);
     
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
+    motion_cost_matrix_t m_polarSADMatrix;
     Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
@@ -64,6 +73,9 @@ protected:
     float m_sad_factor; // SAD factor
     float m_height_factor; // height factor
     float m_polar_dist_factor; // polar dist factor
+    float m_polar_sad_factor;
+    
+    float m_minPolarSADForBeingStatic;
     
     typedef vector < stixels3d_t > t_tracker;
     t_tracker m_tracker;

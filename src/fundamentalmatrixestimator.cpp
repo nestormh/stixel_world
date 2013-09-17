@@ -346,18 +346,18 @@ void FundamentalMatrixEstimator::visualize(const cv::Mat & imgLt0, const cv::Mat
     for (uint32_t i = 0; i < correspondences[0].size(); i++) {
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         
-        cv::circle(Rt0, correspondences[0][i], 2, color, -1);
-        cv::circle(Lt1, correspondences[1][i], 2, color, -1);
-        cv::circle(Rt1, correspondences[2][i], 2, color, -1);
-        cv::circle(Lt0, correspondences[3][i], 2, color, -1);
+        cv::circle(Rt0, correspondences[0][i], 5, color, -1);
+        cv::circle(Lt1, correspondences[1][i], 5, color, -1);
+        cv::circle(Rt1, correspondences[2][i], 5, color, -1);
+        cv::circle(Lt0, correspondences[3][i], 5, color, -1);
     }
     
-    for (uint32_t i = 0; i < finalCorrespondences[0].size(); i++) {
-        cv::circle(Rt0, finalCorrespondences[0][i], 7, cv::Scalar(255, 0, 0), 2);
-        cv::circle(Lt1, finalCorrespondences[1][i], 7, cv::Scalar(255, 0, 0), 2);
-        cv::circle(Rt1, finalCorrespondences[2][i], 7, cv::Scalar(255, 0, 0), 2);
-        cv::circle(Lt0, finalCorrespondences[3][i], 7, cv::Scalar(255, 0, 0), 2);
-    }
+//     for (uint32_t i = 0; i < finalCorrespondences[0].size(); i++) {
+//         cv::circle(Rt0, finalCorrespondences[0][i], 7, cv::Scalar(255, 0, 0), 2);
+//         cv::circle(Lt1, finalCorrespondences[1][i], 7, cv::Scalar(255, 0, 0), 2);
+//         cv::circle(Rt1, finalCorrespondences[2][i], 7, cv::Scalar(255, 0, 0), 2);
+//         cv::circle(Lt0, finalCorrespondences[3][i], 7, cv::Scalar(255, 0, 0), 2);
+//     }
     
     cv::Mat scaledLt0(300, 400, CV_8UC3);
     cv::Mat scaledRt0(300, 400, CV_8UC3); 
@@ -365,6 +365,7 @@ void FundamentalMatrixEstimator::visualize(const cv::Mat & imgLt0, const cv::Mat
     cv::Mat scaledRt1(300, 400, CV_8UC3);
 
     cv::Mat finalView(600, 800, CV_8UC3);
+    
     
     cv::resize(Lt0, scaledLt0, scaledLt0.size());
     cv::resize(Lt1, scaledRt0, scaledLt0.size());
@@ -376,6 +377,13 @@ void FundamentalMatrixEstimator::visualize(const cv::Mat & imgLt0, const cv::Mat
     scaledLt1.copyTo(finalView(cv::Rect(0, 300, 400, 300)));
     scaledRt1.copyTo(finalView(cv::Rect(400, 300, 400, 300)));
     
+//     for (uint32_t i = 0; i < finalCorrespondences[0].size(); i++) {
+//         cv::line(finalView, finalCorrespondences[0][i] * 0.625, (finalCorrespondences[1][i] + cv::Point2f(Lt0.cols, 0)) * 0.625, cv::Scalar(0, 0, 255));
+//         cv::line(finalView, (finalCorrespondences[2][i] + cv::Point2f(Lt0.cols, Lt0.rows)) * 0.625, (finalCorrespondences[1][i] + cv::Point2f(Lt0.cols, 0)) * 0.625, cv::Scalar(0, 0, 255));
+//         cv::line(finalView, (finalCorrespondences[2][i] + cv::Point2f(Lt0.cols, Lt0.rows)) * 0.625, (finalCorrespondences[3][i] + cv::Point2f(0, Lt0.rows)) * 0.625, cv::Scalar(0, 0, 255));
+//         cv::line(finalView, finalCorrespondences[0][i] * 0.625, (finalCorrespondences[3][i] + cv::Point2f(0, Lt0.rows)) * 0.625, cv::Scalar(0, 0, 255));
+//     }
+//     
     cv::imshow("finalView", finalView);
 
     waitForKey();

@@ -24,7 +24,7 @@
 #include "utils.h"
 #include "polarcalibration.h"
 
-#include "stixel_world_lib.hpp"
+#include "applications/stixel_world_lib/stixel_world_lib.hpp"
 #include "video_input/VideoInputFactory.hpp"
 #include "video_input/preprocessing/CpuPreprocessor.hpp"
 #include "stereo_matching/stixels/AbstractStixelWorldEstimator.hpp"

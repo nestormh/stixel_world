@@ -26,9 +26,9 @@
 #include <boost/gil/gil_all.hpp>
 
 #include "rectification.h"
-#include "groundestimator.h"
+// #include "groundestimator.h"
 #include "stixelsapplication.h"
-#include "stixel_world_lib.hpp"
+// #include "stixel_world_lib.hpp"
 #include <omp.h>
 
 using namespace std;

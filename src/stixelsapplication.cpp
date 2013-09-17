@@ -17,7 +17,7 @@
 
 #include "stixelsapplication.h"
 
-#include "stereo_matching/stixels/StixelWorldEstimatorFactory.hpp"
+#include "doppia/extendedstixelworldestimatorfactory.h"
 
 #include "utils.h"
 #include "fundamentalmatrixestimator.h"
@@ -44,7 +44,7 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
 
     m_initialFrame = mp_video_input->get_current_frame_number() + 1;
     
-    mp_stixel_world_estimator.reset(doppia::StixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
+    mp_stixel_world_estimator.reset(ExtendedStixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
     mp_prevStixels.reset(new stixels_t);
     mp_polarCalibration.reset(new PolarCalibration());
     
@@ -53,26 +53,35 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
                                                 mp_stixel_world_estimator->get_stixel_width(),
                                                 mp_polarCalibration) );
-    mp_stixel_motion_estimator->set_motion_cost_factors(0.3f, 0.7f, 0.0f);
+    mp_stixel_motion_estimator->set_motion_cost_factors(0.5f, 0.5f, 0.0f, 0.0f);
     
     // NOTE: This is just for fast tuning of the motion estimators
-//     mp_stixels_tests.resize(6);
-//     for (uint32_t i = 0; i < 6; i++) {
-//         mp_stixels_tests[i].reset( 
-//             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
-//                                 mp_stixel_world_estimator->get_stixel_width(),
-//                                 mp_polarCalibration) );
-//     }
-//     mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f);
-//     mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f);
-    mp_stixels_tests[1]->set_motion_cost_factors(0.3f, 0.3f, 0.4f);
-    mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f);
-    mp_stixels_tests[3]->set_motion_cost_factors(0.5f, 0.0f, 0.5f);
-    mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.5f, 0.5f);
-    mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.5f, 0.0f);
-    // end of NOTE
+    mp_stixels_tests.resize(6);
+    for (uint32_t i = 0; i < 6; i++) {
+        mp_stixels_tests[i].reset( 
+            new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+                                mp_stixel_world_estimator->get_stixel_width(),
+                                mp_polarCalibration) );
+    }
+//     mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f);
+//     mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f, 0.0f);
+//     mp_stixels_tests[1]->set_motion_cost_factors(0.3f, 0.3f, 0.0f, 0.4f);
+//     mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 0.0f, 1.0f);
+//     mp_stixels_tests[3]->set_motion_cost_factors(0.5f, 0.0f, 0.0f, 0.5f);
+//     mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.5f, 0.0f, 0.5f);
+//     mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.5f, 0.0f, 0.0f);
+
+    mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f);
+    mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f, 0.0f);
+    mp_stixels_tests[1]->set_motion_cost_factors(0.3f, 0.3f, 0.4f, 0.0f);
+    mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f, 0.0f);
+    mp_stixels_tests[3]->set_motion_cost_factors(0.5f, 0.0f, 0.5f, 0.0f);
+    mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.5f, 0.5f, 0.0f);
+    mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.5f, 0.0f, 0.0f);
+
+// end of NOTE
             
-    m_waitTime = 20;
+    m_waitTime = 0;
     
     return;
 }
@@ -145,6 +154,14 @@ void StixelsApplication::runStixelsApplication()
 {
     cv::namedWindow("output");
     cv::moveWindow("output", 1366, 0);
+    
+    
+    cv::namedWindow("polar");
+    if (mp_stixels_tests.size() == 0)
+        cv::moveWindow("polar", 2646, 0);
+    
+    cv::namedWindow("polarTrack");
+    cv::moveWindow("polarTrack", 1366, 0);
     
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
@@ -255,6 +272,8 @@ bool StixelsApplication::rectifyPolar()
         cout << "Error while trying to get the polar alignment for the images in the left" << endl;
         return false;
     }
+    
+    mp_polarCalibration->rectifyAndStoreImages(prevLeft, currLeft);
     
 //     transformStixels();
     
@@ -504,6 +523,18 @@ void StixelsApplication::visualize()
 {
     if (mp_video_input->get_current_frame_number() == m_initialFrame)
         return;
+    
+    cv::Mat polarOutput;
+    cv::Mat polar1, polar2, diffPolar;
+    mp_polarCalibration->getStoredRectifiedImages(polar1, polar2);
+    cv::Mat inverseX, inverseY;
+    mp_polarCalibration->getInverseMaps(inverseX, inverseY, 1);
+    cv::absdiff(polar1, polar2, diffPolar);
+    cv::Mat diffRect = cv::Mat::zeros(mp_video_input->get_left_image().height(), mp_video_input->get_left_image().width(), CV_8UC3);
+    cv::remap(diffPolar, diffRect, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
+    cv::resize(diffPolar, polarOutput, cv::Size(640, 720));
+    mp_stixel_motion_estimator->drawTracker(diffRect);
+    cv::imshow("polar", diffRect);
 
     if (mp_stixels_tests.size() == 0) {
         visualize3();
@@ -538,7 +569,6 @@ void StixelsApplication::visualize()
     imgCurrent[3].copyTo(output(cv::Rect(0, imgCurrent[0].rows, imgCurrent[3].cols, imgCurrent[3].rows)));
     imgCurrent[4].copyTo(output(cv::Rect(imgCurrent[0].cols, imgCurrent[0].rows, imgCurrent[4].cols, imgCurrent[4].rows)));
     imgCurrent[5].copyTo(output(cv::Rect(2 * imgCurrent[0].cols, imgCurrent[0].rows, imgCurrent[5].cols, imgCurrent[5].rows)));
-    
     
     cv::imshow("output", output);
     

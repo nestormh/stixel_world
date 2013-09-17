@@ -41,6 +41,7 @@ find_package(PCL REQUIRED)
 # find_package(MPFR REQUIRED)
 find_package(SDL REQUIRED)
 find_package(PNG REQUIRED)
+find_package(Doppia REQUIRED)
 
 set (EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 # add_subdirectory(tutorials)
