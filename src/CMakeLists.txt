@@ -10,10 +10,13 @@ add_executable(testStixelWorld
     doppia/extendedfaststixelworldestimator.cpp 
     doppia/extendedstixelworldestimatorfactory.cpp
     doppia/extendedfastgroundplaneestimator.cpp
+    motionevaluation.cpp
     main.cpp
     
     ${DOPPIA_CPP_FILES}
     ${POLAR_CALIBRATION_SRC}
+    ${DENSETRACKER_CCFILES}
+    ${DENSETRACKER_HFILES}
 )
   
 include_directories(testStixelWorld
@@ -27,6 +30,7 @@ include_directories(testStixelWorld
 #     ${CUDA_INCLUDE_DIRS}
     /usr/include/pcl-1.7  # This line is just to help kdevelop to index PCL includes (remove)
     ${DOPPIA_INCLUDE_DIRS}
+    ${DENSETRACKER_INCLUDE_DIRS}
 #     /home/nestor/Dropbox/KULeuven/projects/doppia/src/applications/stixel_world_lib/
 #     /home/nestor/Dropbox/KULeuven/projects/doppia/src/
 #     /home/nestor/Dropbox/KULeuven/projects/doppia/libs/
@@ -44,6 +48,7 @@ target_link_libraries(testStixelWorld
   ${SDL_LIBRARY}
   ${PNG_LIBRARIES}
   ${DOPPIA_LIB}
+  ${DENSETRACKER_LIBRARIES}
 #   ${Boost_
 #   ${CGAL_CGAL_LIBRARY}
 #   ${GMP_LIBRARIES}

@@ -26,6 +26,13 @@ set (DOPPIA_CPP_FILES
   ${DOPPIA_BASE_PATH}/src/stereo_matching/stixels/motion/DummyStixelMotionEstimator.cpp
   ${DOPPIA_BASE_PATH}/src/drawing/gil/colors.cpp
   ${DOPPIA_BASE_PATH}/src/image_processing/IrlsLinesDetector.cpp
+  ${DOPPIA_BASE_PATH}/src/stereo_matching/stixels/stixels.pb.cc
+  ${DOPPIA_BASE_PATH}/src/objects_detection/detections.pb.cc
+  ${DOPPIA_BASE_PATH}/src/objects_detection/detector_model.pb.cc
+  ${DOPPIA_BASE_PATH}/src/helpers/data/DataSequenceHeader.pb.cc
+  ${DOPPIA_BASE_PATH}/src/stereo_matching/ground_plane/plane3d.pb.cc
+  ${DOPPIA_BASE_PATH}/src/stereo_matching/stixels/ground_top_and_bottom.pb.cc
+
 )
 
 set (DOPPIA_LIB ${DOPPIA_BASE_PATH}/src/applications/stixel_world_lib/build/libstixel_world.so)

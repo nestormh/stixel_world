@@ -26,6 +26,8 @@ public:
     ExtendedFastGroundPlaneEstimator(const boost::program_options::variables_map &options,
                                      const doppia::StereoCameraCalibration &stereo_calibration);
     virtual ~ExtendedFastGroundPlaneEstimator();
+    
+    void compute();
 };
 }
 #endif // EXTENDEDFASTGROUNDPLANEESTIMATOR_H

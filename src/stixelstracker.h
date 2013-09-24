@@ -23,6 +23,7 @@
 #include <opencv2/opencv.hpp>
 #include "polarcalibration.h"
 #include "doppia/stixel3d.h"
+#include "densetracker.h"
 
 using namespace doppia;
 
@@ -37,13 +38,31 @@ public:
     void compute();
     
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
-                                 const float & polar_dist_factor, const float & polar_sad_factor);
+                                 const float & polar_dist_factor, const float & polar_sad_factor,
+                                 const float& dense_tracking_factor);
+    
+    void updateDenseTracker(const cv::Mat & frame);
+    
     void drawTracker(cv::Mat & img, cv::Mat & imgTop);
     void drawTracker(cv::Mat & img);
+    void drawDenseTracker(cv::Mat & img);
+    
+    float getSADFactor() { return m_sad_factor; }
+    float getHeightFactor() { return m_height_factor; }
+    float getPolarDistFactor() { return m_polar_dist_factor; }
+    float getPolarSADFactor() { return m_polar_sad_factor; }
+    float getDenseTrackingFactor() { return m_dense_tracking_factor; }
+    
+    typedef vector < stixels3d_t > t_tracker;
+    typedef deque <stixels3d_t> t_historic;
+    t_tracker getTracker() { return m_tracker; }
+    t_historic getHistoric() { return m_stixelsHistoric; }
 
 protected:    
     static const uint8_t MAX_DISPARITY = 128;
+    static const uint8_t MAX_ITERATIONS_STORED = 51;
     
+    void estimate_stixel_direction();
     void compute_static_stixels();
     void compute_motion_cost_matrix();
     void transform_stixels_polar();
@@ -57,28 +76,33 @@ protected:
     void updateTracker();
     void getClusters();
     float compute_polar_SAD(const Stixel& stixel1, const Stixel& stixel2);
+    float compute_dense_tracking_score(const Stixel& currStixel, const Stixel& prevStixel);
     void draw_polar_SAD(cv::Mat & img, const Stixel& stixel1, const Stixel& stixel2);
     
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
+    motion_cost_matrix_t m_denseTrackingMatrix;
     Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
+    boost::shared_ptr<dense_tracker::DenseTracker> mp_denseTracker;
     
     stixels_t m_previous_stixels_polar;
     stixels_t m_current_stixels_polar;
     
+    
     float m_sad_factor; // SAD factor
     float m_height_factor; // height factor
     float m_polar_dist_factor; // polar dist factor
-    float m_polar_sad_factor;
+    float m_polar_sad_factor;  // SAD in polar images
+    float m_dense_tracking_factor; // Dense tracking
     
     float m_minPolarSADForBeingStatic;
     
-    typedef vector < stixels3d_t > t_tracker;
     t_tracker m_tracker;
+    t_historic m_stixelsHistoric;
     
     vector<cv::Scalar> m_color;
     

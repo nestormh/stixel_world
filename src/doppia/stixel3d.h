@@ -37,9 +37,13 @@ public:
     //Depth (avoids recalculating it each time)
     float depth;
     
+    int forward_delta_x;
+    bool valid_forward_delta_x;
+    
     // Tells if an stixel is an static obstacle or not
     bool isStatic;
     
+    cv::Vec2d direction;
     
     template<class T>
     T getBottom2d() { return T(x, bottom_y); }

@@ -23,6 +23,7 @@
 
 #include "utils.h"
 #include "polarcalibration.h"
+#include "motionevaluation.h"
 
 #include "applications/stixel_world_lib/stixel_world_lib.hpp"
 #include "video_input/VideoInputFactory.hpp"
@@ -56,6 +57,7 @@ private:
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
     boost::shared_ptr<StixelsTracker> mp_stixel_motion_estimator;
+    boost::shared_ptr<MotionEvaluation> mp_stixel_motion_evaluator;
     
     vector< boost::shared_ptr<StixelsTracker> > mp_stixels_tests;
     
@@ -75,6 +77,8 @@ private:
     uint32_t m_initialFrame;
     
     uint32_t m_waitTime;
+    
+    cv::Mat m_currLeft;
 };
 
     
