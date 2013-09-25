@@ -33,6 +33,9 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <boost/graph/graph_concepts.hpp>
 
+#include <lemon/matching.h>
+#include <lemon/smart_graph.h>
+
 #include "utils.h"
 
 using namespace std;
@@ -161,7 +164,8 @@ void StixelsTracker::compute()
     
 //     compute_static_stixels();
     compute_motion_cost_matrix();
-    compute_motion();
+//     compute_motion();
+    computeMotionWithGraphs();
 //     update_stixel_tracks_image();
     updateTracker();
 //     estimate_stixel_direction();
@@ -672,6 +676,66 @@ void StixelsTracker::draw_polar_SAD(cv::Mat& img, const Stixel& stixel1, const S
             img.at<cv::Vec3b>(pos1.y, pos1.x)= cv::Vec3b::all(sad);
         }
     }
+}
+
+void StixelsTracker::computeMotionWithGraphs()
+{
+    lemon::SmartGraph graph;
+    lemon::SmartGraph::EdgeMap <float> costs(graph);
+    lemon::SmartGraph::NodeMap <uint32_t> nodeIdx(graph);
+    graph.reserveNode(current_stixels_p->size() + previous_stixels_p->size());
+    graph.reserveEdge(current_stixels_p->size() * previous_stixels_p->size());
+    
+    BOOST_FOREACH (const Stixel & stixel, *previous_stixels_p)
+        nodeIdx[graph.addNode()] = stixel.x;
+    BOOST_FOREACH (const Stixel & stixel, *current_stixels_p)
+        nodeIdx[graph.addNode()] = stixel.x;
+    
+    const float maxCost = motion_cost_matrix.maxCoeff();
+    for (uint32_t prevIdx = 0; prevIdx < previous_stixels_p->size(); prevIdx++) {
+        const Stixel & prevStixel = previous_stixels_p->at(prevIdx);
+        for (uint32_t currIdx = 0; currIdx < current_stixels_p->size(); currIdx++) {
+            const Stixel & currStixel = current_stixels_p->at(currIdx);
+            
+            const int32_t pixelwise_motion = prevStixel.x - currStixel.x;
+            const uint32_t & maximum_motion_in_pixels_for_current_stixel = compute_maximum_pixelwise_motion_for_stixel( currStixel );
+            
+            const uint32_t rowIndex = pixelwise_motion + maximum_possible_motion_in_pixels;
+            
+            if( pixelwise_motion >= -( int( maximum_motion_in_pixels_for_current_stixel ) ) &&
+                pixelwise_motion <= int( maximum_motion_in_pixels_for_current_stixel ) &&
+                (motion_cost_assignment_matrix(rowIndex, currIdx))) {
+
+                const float & cost = maxCost - motion_cost_matrix(rowIndex, currIdx);
+                
+                const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevIdx), graph.nodeFromId(currIdx + previous_stixels_p->size()));
+                costs[e] = cost;
+            }
+        }
+    }
+    
+    lemon::MaxWeightedMatching< lemon::SmartGraph, lemon::SmartGraph::EdgeMap <float> > graphMatcher(graph, costs);
+    
+    graphMatcher.run();
+    
+    const lemon::SmartGraph::NodeMap<lemon::SmartGraph::Arc> & matchingMap = graphMatcher.matchingMap();
+    
+    vector<int32_t> correspondences(current_stixels_p->size());
+    BOOST_FOREACH(int32_t &i, correspondences)
+        i = -1;
+    for (uint32_t i = 0; i < previous_stixels_p->size(); i++) {
+        if (graphMatcher.mate(graph.nodeFromId(i)) != lemon::INVALID) {
+            lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
+//             correspondences[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
+            stixels_motion[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
+        }
+    }
+}
+
+void StixelsTracker::computeMotionWithGraphsAndDenseTracker()
+{
+//     mp_denseTracker
+    
 }
 
 

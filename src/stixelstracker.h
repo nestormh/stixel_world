@@ -81,6 +81,9 @@ protected:
     
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
+    void computeMotionWithGraphs();
+    void computeMotionWithGraphsAndDenseTracker();
+    
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
     motion_cost_matrix_t m_denseTrackingMatrix;

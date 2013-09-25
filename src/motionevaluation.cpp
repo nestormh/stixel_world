@@ -61,6 +61,12 @@ MotionEvaluation::MotionEvaluation(const boost::program_options::variables_map& 
 
 MotionEvaluation::~MotionEvaluation()
 {
+    saveResults();
+}
+
+void MotionEvaluation::saveResults()
+{
+
     using namespace boost::posix_time;
     const ptime current_time(second_clock::local_time());
     ofstream fout(m_outputFileName.c_str(), ios::trunc);
@@ -287,12 +293,9 @@ void MotionEvaluation::evaluate(const uint32_t & currentFrame)
     if ((currentFrame <= MAX_LENGTH) || (! m_evaluationActivated))
         return;
     
-//     const vector < t_annotation> & annotations = m_annotations[currentFrame];
     BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
         const StixelsTracker::t_historic & historic = (handler.p_stixel_motion_estimator)->getHistoric();
         for (uint32_t j = 1; j <= MAX_LENGTH; j++) {
-            cv::Mat imgEvaluation/* = cv::Mat::zeros(480, 640, CV_8UC3)*/;
-            
             const uint32_t evaluatedFrame = currentFrame - j;
             
             vector< t_annotation > detections;
@@ -300,229 +303,16 @@ void MotionEvaluation::evaluate(const uint32_t & currentFrame)
                     
             vector < t_annotation> annotations = m_annotations[currentFrame];
             uint32_t tmpTp, tmpFn;
-            countErrors(0.0f, annotations, detections, tmpTp, tmpFn, imgEvaluation);
+            countErrors(0.0f, annotations, detections, tmpTp, tmpFn);
 
             handler.counters[j - 1].tp += tmpTp;
             handler.counters[j - 1].fn += tmpFn;
-            handler.counters[j - 1].recallSum += tmpTp / (float)(tmpTp + tmpFn);
-            handler.counters[j - 1].totalExamples++;
-            
-//             if ((j - 1) % 10 == 0) {
-//                 stringstream ss;
-//                 ss << "PASCAL";
-//                 ss << j - 1;
-//                 cv::imshow(ss.str(), imgEvaluation);
-//             }
         }
     }
     
-//     cv::waitKey(0);
-    
-    {
-        uint32_t i = 0;
-        BOOST_FOREACH(const t_statistics_handler & handler, m_statistics_handlers) {
-            cout << i << ": ";
-            uint32_t j = 0;
-            BOOST_FOREACH(const t_statistics_counter & counter, handler.counters) {
-                if (j % 10 == 0) {
-                    const float recall = counter.tp / (float)(counter.fn + counter.tp);
-                    const float recall2 = counter.recallSum / (float)(counter.totalExamples);
-                    cout << "[" << j << "]TP(" << counter.tp << ")FN(" << counter.fn << ")R(" << recall << ")R2(" << recall2 << ") || ";
-                }
-                j++;
-            }
-            cout << endl;
-            i++;
-        }
-    }
-    
-//     cv::waitKey(0);
+    if (currentFrame % 10 == 0)
+        saveResults();
 }
-
-void MotionEvaluation::record_stixels(const uint32_t & idx, const uint32_t & currentFrame)
-{
-    const boost::shared_ptr<StixelsTracker> & p_stixel_motion_estimator = m_statistics_handlers[idx].p_stixel_motion_estimator;
-    boost::shared_ptr<StixelsDataSequence> & p_stixels_data_sequence = m_statistics_handlers[idx].stixels_data_sequence;
-    
-    if(p_stixels_data_sequence == false)
-    {
-        // first invocation, need to create the data_sequence file first
-        boost::filesystem::path recordingPath = m_outputFolder;
-        const boost::posix_time::ptime current_time(boost::posix_time::second_clock::local_time());
-        recordingPath = boost::str( boost::format("/tmp/%i_%02i_%02i_%i_recordings")
-                                    % current_time.date().year()
-                                    % current_time.date().month().as_number()
-                                    % current_time.date().day()
-                                    % current_time.time_of_day().total_seconds() );
-        const string filename = recordingPath.string();
-        
-        StixelsDataSequence::attributes_t attributes;
-        attributes.insert(std::make_pair("created_by", "StixelWorldApplication"));
-        
-        p_stixels_data_sequence.reset(new StixelsDataSequence(filename, attributes));
-        
-        cout << "Created recording file " << filename << std::endl;
-    }
-    
-    assert((bool) p_stixels_data_sequence == true);
-    
-    stixels_t the_stixels;
-    if(p_stixel_motion_estimator)
-    {
-        // copy stixels with motion data
-        the_stixels = p_stixel_motion_estimator->get_current_stixels();
-        //const AbstractStixelMotionEstimator::stixels_motion_t& stixels_motion = p_stixel_motion_estimator->get_stixels_motion();
-    }
-    else
-    {
-        // copy stixels, without motion data
-        the_stixels = p_stixel_motion_estimator->get_current_stixels(); // current stixels
-    }
-    
-    StixelsDataSequence::data_type stixels_data;
-    const string image_name = boost::str(boost::format("frame_%i") % currentFrame);
-    stixels_data.set_image_name(image_name);    
-    
-    BOOST_FOREACH(const Stixel &stixel, the_stixels)
-    {
-        doppia_protobuf::Stixel *stixel_data_p = stixels_data.add_stixels();
-        
-        stixel_data_p->set_width(stixel.width);
-        stixel_data_p->set_x(stixel.x);
-        stixel_data_p->set_bottom_y(stixel.bottom_y);
-        stixel_data_p->set_top_y(stixel.top_y);
-        stixel_data_p->set_disparity(stixel.disparity);
-        
-        doppia_protobuf::Stixel::Type stixel_type = doppia_protobuf::Stixel::Pedestrian;
-        switch(stixel.type)
-        {
-            case Stixel::Occluded:
-                stixel_type = doppia_protobuf::Stixel::Occluded;
-                break;
-                
-            case Stixel::Car:
-                stixel_type = doppia_protobuf::Stixel::Car;
-                break;
-                
-            case Stixel::Pedestrian:
-                stixel_type = doppia_protobuf::Stixel::Pedestrian;
-                break;
-                
-            case Stixel::StaticObject:
-                stixel_type = doppia_protobuf::Stixel::StaticObject;
-                break;
-                
-            case Stixel::Unknown:
-                stixel_type = doppia_protobuf::Stixel::Unknown;
-                break;
-                
-            default:
-                throw std::invalid_argument(
-                    "StixelWorldApplication::record_stixels received a stixel "
-                    "with a type with a no known correspondence in "
-                    "the protocol buffer format");
-                break;
-        }
-        
-        stixel_data_p->set_type(stixel_type);
-        
-        if(p_stixel_motion_estimator)
-        {
-            // if stixel contains motion information
-            stixel_data_p->set_backward_delta_x( stixel.backward_delta_x );
-            stixel_data_p->set_valid_delta_x( stixel.valid_backward_delta_x );            
-        }
-        
-    } // end of "for each stixel in stixels"    
-    
-    add_ground_plane_data(m_statistics_handlers[idx].p_stixel_world_estimator, stixels_data);
-    
-//     if(should_save_ground_plane_corridor)
-//     {
-//         add_ground_plane_corridor_data(stixels_data);
-//     }
-    
-    p_stixels_data_sequence->write(stixels_data);
-    
-    return;
-} // end of StixelWorldApplication::record_stixels
-
-
-// void MotionEvaluation::add_ground_plane_corridor_data(doppia_protobuf::Stixel &stixels_data)
-// {
-//     
-//     StixelWorldEstimator *the_stixel_world_estimator_p =
-//     dynamic_cast<StixelWorldEstimator *>(stixel_world_estimator_p.get());
-//     
-//     if(the_stixel_world_estimator_p)
-//     {
-//         StixelWorldEstimator &the_stixel_world_estimator = *the_stixel_world_estimator_p;
-//         
-//         // add the ground corridor data --
-//         {
-//             doppia_protobuf::GroundTopAndBottom *ground_corridor_p = stixels_data.mutable_ground_top_and_bottom();
-//             
-//             const StixelWorldEstimator::ground_plane_corridor_t & ground_corridor = \
-//             the_stixel_world_estimator.get_ground_plane_corridor();
-//             
-//             for(size_t v=0; v < ground_corridor.size(); v+=1)
-//             {
-//                 const int bottom_y = v;
-//                 const int top_y = ground_corridor[v];
-//                 
-//                 if(top_y < 0)
-//                 {
-//                     // a non valid bottom_y value
-//                     continue;
-//                 }
-//                 
-//                 doppia_protobuf::TopAndBottom *top_and_bottom_p = ground_corridor_p->add_top_and_bottom();
-//                 
-//                 assert(top_y < bottom_y);
-//                 top_and_bottom_p->set_top_y(top_y);
-//                 top_and_bottom_p->set_bottom_y(bottom_y);
-//                 
-//             } // end of "for each row bellow the horizon"
-//         }
-//         
-//         // add the ground plane data --
-//         {
-//             const GroundPlane &ground_plane = the_stixel_world_estimator.get_ground_plane();
-//             
-//             doppia_protobuf::Plane3d *ground_plane3d_p = stixels_data.mutable_ground_plane();
-//             
-//             ground_plane3d_p->set_offset(ground_plane.offset());
-//             ground_plane3d_p->set_normal_x(ground_plane.normal()(i_x));
-//             ground_plane3d_p->set_normal_y(ground_plane.normal()(i_y));
-//             ground_plane3d_p->set_normal_z(ground_plane.normal()(i_z));
-//         }
-//     }
-//     else
-//     { // the_stixel_world_estimator_p == NULL
-//         throw std::runtime_error(
-//             "StixelWorldApplication::add_ground_plane_corridor expected "
-//             "AbstractStixelWorldEstimator to be an instance of StixelWorldEstimator. "
-//             "Try using a non_fast variant");
-//     }
-//     
-//     return;
-// } // end of StixelWorldApplication::add_ground_plane_corridor_data
-
-void MotionEvaluation::add_ground_plane_data(boost::shared_ptr<doppia::AbstractStixelWorldEstimator> p_stixel_world_estimator,
-                                             doppia_protobuf::Stixels &stixels_data)
-{
-    
-    const GroundPlane ground_plane = p_stixel_world_estimator->get_ground_plane();
-    
-    doppia_protobuf::Plane3d *ground_plane3d_p = stixels_data.mutable_ground_plane();
-    
-    ground_plane3d_p->set_offset(ground_plane.offset());
-    ground_plane3d_p->set_normal_x(ground_plane.normal()(i_x));
-    ground_plane3d_p->set_normal_y(ground_plane.normal()(i_y));
-    ground_plane3d_p->set_normal_z(ground_plane.normal()(i_z));
-    
-    return;
-} // end of StixelWorldApplication::add_ground_plane_data
 
 inline
 float MotionEvaluation::area(const t_annotation& a)
@@ -570,35 +360,22 @@ bool MotionEvaluation::intersectionOverUnionCriterion(const t_annotation& detect
 }
 
 void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t_annotation >& gt, const vector< t_annotation >& detections,
-                                   uint32_t& tp, uint32_t& fn, cv::Mat & img)
+                                   uint32_t& tp, uint32_t& fn)
 {
-    tp = 0;
-    fn = 0;
-    
-    float p = 0.5f;
+    const float p = 0.5f;
     
     vector< t_annotation > tmpGT(gt.size()), tmpDetections(detections.size());
     copy(gt.begin(), gt.end(), tmpGT.begin());
     copy(detections.begin(), detections.end(), tmpDetections.begin());
     
-    cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-    
     typedef vector< t_annotation >::iterator annIt;
     for (annIt itGT = tmpGT.begin(); itGT != tmpGT.end(); itGT++) {
         const t_annotation & gtAnnotation = *itGT;
-//         cout << "GT: " << gtAnnotation.ul << ", " << gtAnnotation.br << endl;
-        cv::rectangle(img, itGT->br, itGT->ul, color, 3);
+
         bool found = false;
-        cv::Point2i centerGT((itGT->ul.x + itGT->br.x) / 2.0f, (itGT->ul.y + itGT->br.y) / 2.0f);
         for (annIt itDet = tmpDetections.begin(); itDet != tmpDetections.end(); itDet++) {
             const t_annotation & detectionAnnotation = *itDet;
             
-            cv::rectangle(img, itDet->br, itDet->ul, color, 1);
-            
-            cv::Point2i centerDT((itDet->ul.x + itDet->br.x) / 2.0f, (itDet->ul.y + itDet->br.y) / 2.0f);
-//             cout << "\tDT: " << detectionAnnotation.ul << ", " << detectionAnnotation.br;
-//             cout << ", O: " << doOverlap(detectionAnnotation, gtAnnotation);
-//             cout << ", IOU: " << intersectionOverUnionCriterion(detectionAnnotation, gtAnnotation, p) << endl;
             if (doOverlap(detectionAnnotation, gtAnnotation) &&
                 intersectionOverUnionCriterion(detectionAnnotation, gtAnnotation, p)) {
                     
@@ -608,38 +385,18 @@ void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t
                     itGT--;
                     itDet--;
                     
-                    tp++;
-                    found = true;
-                    
-                    cv::circle(img, centerDT, 5, cv::Scalar(0, 255, 0), -1);
-                    
                     break;
             }
         }
-        if (! found) {
-            fn++;
-            cv::circle(img, centerGT, 7, cv::Scalar(0, 0, 255), 1);
-        }
     }
-    
-//     cout << "ds " << detections.size() << endl;
-//     cout << "gs " << gt.size() << endl;
     
     tp = detections.size() - tmpDetections.size();
     fn = tmpGT.size();
-    
-//     cout << "fp " << fp << endl;
-//     cout << "fn " << fn << endl;
-    
-//     exit(0);
 }
 
 void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic & historic, const uint32_t& idx, const uint32_t & currentFrame,
                                                 vector< t_annotation >& detections)
 {
-//     cv::Mat imgAnnotations = cv::Mat::zeros(480, 640, CV_8UC3);
-//     cv::Mat imgDetections = cv::Mat::zeros(480, 640, CV_8UC3);
-    
     vector< t_annotation > gt = m_annotations[currentFrame - idx];
     detections.reserve(gt.size());
     
@@ -662,14 +419,11 @@ void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic
         t_annotation currDetection;
         currDetection.ul = cv::Point2i(INT_MAX, INT_MAX);
         currDetection.br = cv::Point2i(INT_MIN, INT_MIN);
-//         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-//         cv::rectangle(imgAnnotations, gtAnnotation.ul, gtAnnotation.br, color);
-//         cv::rectangle(imgDetections, gtAnnotation.ul, gtAnnotation.br, color);
+        
         for (uint32_t x = gtAnnotation.ul.x; x <= gtAnnotation.br.x; x++) {
             const Stixel3d & currStixel = evolution[x];
             
             if (currStixel.x != -1) {
-//                 cv::line(imgDetections, cv::Point2i(x, gtAnnotation.br.y), cv::Point2i(currStixel.x, currStixel.top_y), color);
                 
                 if (currStixel.x < currDetection.ul.x) currDetection.ul.x = currStixel.x;
                 if (currStixel.x > currDetection.br.x) currDetection.br.x = currStixel.x;
@@ -678,38 +432,8 @@ void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic
                 if (currStixel.bottom_y > currDetection.br.y) currDetection.br.y = currStixel.bottom_y;
             }
         }
-//         cv::rectangle(imgDetections, currDetection.ul, currDetection.br, color);
         detections.push_back(currDetection);
     }
-    
-//     if ((idx - 1) % 10 == 0) {
-//         stringstream ss;
-//         ss << "Detections" << idx;
-//         cv::imshow(ss.str(), imgDetections);
-//     }
-    
-//     if (idx == 1) {
-//         cv::imshow("annotations", imgAnnotations);
-//     }
-        
-    /*BOOST_FOREACH(const t_annotation &gtAnnotation, gt) {
-        t_annotation currDetection;
-        currDetection.ul = cv::Point2i(INT_MAX, INT_MAX);
-        currDetection.br = cv::Point2i(INT_MIN, INT_MIN);
-        for (uint32_t x = gtAnnotation.ul.x; x <= gtAnnotation.br.x; x++) {
-            if (tracker[x].size() > idx) {
-                const Stixel & currStixel = tracker[x][tracker[x].size() - idx - 1];
-
-                if (currStixel.x < currDetection.ul.x) currDetection.ul.x = currStixel.x;
-                if (currStixel.x > currDetection.br.x) currDetection.br.x = currStixel.x;
-
-                if (currStixel.top_y < currDetection.ul.y) currDetection.ul.y = currStixel.top_y;
-                if (currStixel.bottom_y > currDetection.br.y) currDetection.br.y = currStixel.bottom_y;
-            }
-        }
-        detections.push_back(currDetection);
-    }*/
-    
 }
 
 }

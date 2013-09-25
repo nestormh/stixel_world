@@ -35,7 +35,7 @@ using namespace std;
 
 namespace stixel_world {
     
-#define MAX_LENGTH 11
+#define MAX_LENGTH 51
     
 typedef struct {
     cv::Point2i ul;
@@ -88,21 +88,17 @@ protected:
     
     vector < t_statistics_handler > m_statistics_handlers;
     
-    /// this method should be called sequentially
-    void record_stixels(const uint32_t & idx, const uint32_t & currentFrame);
-//     void add_ground_plane_corridor_data(doppia_protobuf::Stixels &stixels_data);
-    void add_ground_plane_data(boost::shared_ptr<doppia::AbstractStixelWorldEstimator> p_stixel_world_estimator,
-                               doppia_protobuf::Stixels &stixels_data);
-    
     float area(const t_annotation & a);
     float overlappingArea(const t_annotation & a, const t_annotation & b);
     bool intersectionOverUnionCriterion(const t_annotation & detection, const t_annotation & gt, const float & p);
     bool doOverlap(const t_annotation & a, const t_annotation & b);
     void countErrors(const float& detectionThresh, const vector< t_annotation >& gt, const vector< t_annotation >& detections,
-                     uint32_t& tp, uint32_t& fn, cv::Mat & img);
+                     uint32_t& tp, uint32_t& fn);
     
     void getAnnotationsFromTracks(const StixelsTracker::t_historic & historic, const uint32_t& idx, const uint32_t & currentFrame,
                                   vector< t_annotation >& detections);
+    
+    void saveResults();
 };
 
 

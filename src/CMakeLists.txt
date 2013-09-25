@@ -26,7 +26,7 @@ include_directories(testStixelWorld
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}
     ${POLAR_CALIBRATION_INCLUDE_PATH}
-#     emon.a
+    emon.a
 #     ${CUDA_INCLUDE_DIRS}
     /usr/include/pcl-1.7  # This line is just to help kdevelop to index PCL includes (remove)
     ${DOPPIA_INCLUDE_DIRS}
@@ -55,7 +55,7 @@ target_link_libraries(testStixelWorld
 #   ${CUDA_CURAND_LIBRARIES}
 #   ${OPENGL_LIBRARIES}
 #   ${GLUT_LIBRARIES}
-#   emon
+  emon
 )
 
 message(OPENGL_LIBRARIES ${OPENGL_LIBRARIES})
