@@ -43,12 +43,14 @@ MotionEvaluation::MotionEvaluation(const boost::program_options::variables_map& 
     using namespace boost::posix_time;
     const ptime current_time(second_clock::local_time());
     m_outputFileName = m_outputFolder / 
-                            boost::str( boost::format("results_%i_%02i_%02i_%i.txt")
+                            boost::str( boost::format("results_%i_%02i_%02i___%02i_%02i_%02i.txt")
                                             % current_time.date().year()
                                             % current_time.date().month().as_number()
                                             % current_time.date().day()
-                                            % current_time.time_of_day().total_seconds() );
-
+                                            % current_time.time_of_day().hours()
+                                            % current_time.time_of_day().minutes()
+                                            % current_time.time_of_day().seconds() );
+                            
     BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
         for (uint32_t i = 0; i < MAX_LENGTH; i++) {
             handler.counters[i].tp = 0;
@@ -85,7 +87,9 @@ void MotionEvaluation::saveResults()
             fout << "HEIGHT FACTOR: " << handler.p_stixel_motion_estimator->getHeightFactor() << " ||| ";
             fout << "POLAR DIST FACTOR: " << handler.p_stixel_motion_estimator->getPolarDistFactor() << " ||| ";
             fout << "POLAR SAD FACTOR: " << handler.p_stixel_motion_estimator->getPolarSADFactor() << " ||| ";
-            fout << "DENSE TRACKING FACTOR: " << handler.p_stixel_motion_estimator->getDenseTrackingFactor() << endl;
+            fout << "DENSE TRACKING FACTOR: " << handler.p_stixel_motion_estimator->getDenseTrackingFactor() << " ||| ";
+            fout << "USES GRAPH: " << handler.p_stixel_motion_estimator->useGraphs() << endl;
+            ;
             i++;
         }
     }
@@ -237,6 +241,12 @@ void MotionEvaluation::parseArguments(const boost::program_options::variables_ma
     if(options.count("stixel_world.motion.evaluation.annotations") > 0)
     {
         annotationsFileName = get_option_value<std::string>(options, "stixel_world.motion.evaluation.annotations");
+        
+        if (annotationsFileName.size() == 0) {
+            cout << "No annotations file provided. No evaluations will be performed" << std::endl;
+            m_evaluationActivated = false;
+            return;
+        }
     }
     else
     {

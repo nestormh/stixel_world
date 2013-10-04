@@ -39,7 +39,7 @@ public:
     
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
                                  const float & polar_dist_factor, const float & polar_sad_factor,
-                                 const float& dense_tracking_factor);
+                                 const float& dense_tracking_factor, const bool & useGraphs);
     
     void updateDenseTracker(const cv::Mat & frame);
     
@@ -52,6 +52,7 @@ public:
     float getPolarDistFactor() { return m_polar_dist_factor; }
     float getPolarSADFactor() { return m_polar_sad_factor; }
     float getDenseTrackingFactor() { return m_dense_tracking_factor; }
+    bool useGraphs() { return m_useGraphs; }
     
     typedef vector < stixels3d_t > t_tracker;
     typedef deque <stixels3d_t> t_historic;
@@ -76,13 +77,18 @@ protected:
     void updateTracker();
     void getClusters();
     float compute_polar_SAD(const Stixel& stixel1, const Stixel& stixel2);
+    float compute_polar_SAD(const Stixel& stixel1, const Stixel& stixel2,
+                            const input_image_const_view_t& image_view1, const input_image_const_view_t& image_view2,
+                            const unsigned int stixel_horizontal_padding);
+    void compute_stixel_representation_polar( const Stixel &stixel, const input_image_const_view_t& image_view_hosting_the_stixel,
+                                               stixel_representation_t &stixel_representation, const unsigned int stixel_horizontal_padding,
+                                              const cv::Mat & mapX, const cv::Mat & mapY, const cv::Mat & polarImg);
     float compute_dense_tracking_score(const Stixel& currStixel, const Stixel& prevStixel);
     void draw_polar_SAD(cv::Mat & img, const Stixel& stixel1, const Stixel& stixel2);
     
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
     void computeMotionWithGraphs();
-    void computeMotionWithGraphsAndDenseTracker();
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
@@ -95,12 +101,16 @@ protected:
     stixels_t m_previous_stixels_polar;
     stixels_t m_current_stixels_polar;
     
+    cv::Mat m_mapXprev, m_mapYprev, m_mapXcurr, m_mapYcurr;
+    cv::Mat m_polarImg1, m_polarImg2;
     
     float m_sad_factor; // SAD factor
     float m_height_factor; // height factor
     float m_polar_dist_factor; // polar dist factor
     float m_polar_sad_factor;  // SAD in polar images
     float m_dense_tracking_factor; // Dense tracking
+    
+    bool m_useGraphs;
     
     float m_minPolarSADForBeingStatic;
     

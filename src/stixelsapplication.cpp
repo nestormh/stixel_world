@@ -48,47 +48,43 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
     mp_prevStixels.reset(new stixels_t);
     mp_polarCalibration.reset(new PolarCalibration());
 
-    
-    mp_stixel_motion_estimator.reset( 
-            new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
-                                                mp_stixel_world_estimator->get_stixel_width(),
-                                                mp_polarCalibration) );
-    mp_stixel_motion_estimator->set_motion_cost_factors(0.5f, 0.5f, 0.0f, 0.0f, 0.0f);
-    
     mp_stixel_motion_evaluator.reset(new MotionEvaluation(m_options));
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
     
-    // NOTE: This is just for fast tuning of the motion estimators
-    mp_stixels_tests.resize(6);
-    for (uint32_t i = 0; i < mp_stixels_tests.size(); i++) {
-        mp_stixels_tests[i].reset( 
-            new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
-                                mp_stixel_world_estimator->get_stixel_width(),
-                                mp_polarCalibration) );
-    }
-    mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-    mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
-    mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-    mp_stixels_tests[3]->set_motion_cost_factors(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    mp_stixels_tests[4]->set_motion_cost_factors(0.5f, 0.0f, 0.5f, 0.0f, 0.0f);
-    mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.0f, 0.0f, 0.5f, 0.0f);
-    
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[0]);
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[1]);
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[2]);
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[3]);
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[4]);
-    mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[5]);
-
-//     mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f);
-//     mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 1.0f, 0.0f, 0.0f);
-//     mp_stixels_tests[1]->set_motion_cost_factors(0.3f, 0.3f, 0.4f, 0.0f);
-//     mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f, 0.0f);
-//     mp_stixels_tests[3]->set_motion_cost_factors(0.5f, 0.0f, 0.5f, 0.0f);
-//     mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.5f, 0.5f, 0.0f);
-//     mp_stixels_tests[5]->set_motion_cost_factors(0.5f, 0.5f, 0.0f, 0.0f);
+//     NOTE: This is just for fast tuning of the motion estimators
+//     mp_stixels_tests.resize(6);
+//     for (uint32_t i = 0; i < mp_stixels_tests.size(); i++) {
+//         mp_stixels_tests[i].reset( 
+//             new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+//                                 mp_stixel_world_estimator->get_stixel_width(),
+//                                 mp_polarCalibration) );
+//     }
+//     mp_stixels_tests[0]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, false);
+//     mp_stixels_tests[1]->set_motion_cost_factors(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, false);
+//     mp_stixels_tests[2]->set_motion_cost_factors(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, false);
+//     mp_stixels_tests[3]->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, true);
+//     mp_stixels_tests[4]->set_motion_cost_factors(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, true);
+//     mp_stixels_tests[5]->set_motion_cost_factors(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, true);
+//     
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[0]);
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[1]);
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[2]);
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[3]);
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[4]);
+//     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[5]);
 // end of NOTE
-            
+    
+    if (mp_stixels_tests.size() == 0) {
+        mp_stixel_motion_estimator.reset( 
+        new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+                            mp_stixel_world_estimator->get_stixel_width(),
+                            mp_polarCalibration) );
+        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, false);
+        
+        mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
+    } else {
+        mp_stixel_motion_estimator = mp_stixels_tests[0];
+    }
+    
     m_waitTime = 20;
     
     return;
@@ -555,9 +551,9 @@ void StixelsApplication::visualize()
     mp_stixel_motion_estimator->drawTracker(diffRect);
     cv::imshow("polar", diffRect);
     
-    cv::Mat outputDenseTrack;
-    mp_stixel_motion_estimator->drawDenseTracker(outputDenseTrack);
-    cv::imshow("denseTrack", outputDenseTrack);
+//     cv::Mat outputDenseTrack;
+//     mp_stixel_motion_estimator->drawDenseTracker(outputDenseTrack);
+//     cv::imshow("denseTrack", outputDenseTrack);
 
     if (mp_stixels_tests.size() == 0) {
         visualize3();
