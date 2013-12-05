@@ -40,6 +40,7 @@ namespace stixel_world {
 typedef struct {
     cv::Point2i ul;
     cv::Point2i br;
+    
     int32_t score;
     uint32_t objectId;
 } t_annotation;

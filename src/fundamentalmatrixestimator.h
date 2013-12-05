@@ -24,6 +24,13 @@ using namespace std;
 
 namespace stixel_world {
     
+#define MATCH_STEREO_PAIR 0
+#define MATCH_BETWEEN_FRAMES 1
+
+#define MAX_HORIZONTAL_DIST 1.0
+#define MAX_FLOW_DIST 20.0
+#define MAX_CICLE_DIST 1.0
+    
 class FundamentalMatrixEstimator
 {
 
@@ -37,13 +44,6 @@ public:
                     cv::Mat& FL, cv::Mat& FR, vector < vector < cv::Point2f > > & finalCorrespondences,
                     const uint8_t & method = METHOD_OFLOW, const double & cornerThresh = 50);
 private:
-    static const uint8_t MATCH_STEREO_PAIR = 0;
-    static const uint8_t MATCH_BETWEEN_FRAMES = 1;
-    
-    static const double MAX_HORIZONTAL_DIST = 1.0;
-    static const double MAX_FLOW_DIST = 20.0;
-    static const double MAX_CICLE_DIST = 1.0;
-    
     static void findInitialPoints(const cv::Mat & img, vector<cv::Point2f> & points, const double & cornerThresh);
     static void findPairCorrespondencesOFlow(const cv::Mat & img1, const cv::Mat & img2, 
                                              vector<cv::Point2f> & points1, vector<cv::Point2f> & points2,

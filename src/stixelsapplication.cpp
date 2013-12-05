@@ -78,7 +78,7 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
         new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
                             mp_stixel_world_estimator->get_stixel_width(),
                             mp_polarCalibration) );
-        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, false);
+        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, true);
         
         mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
     } else {
@@ -320,25 +320,25 @@ bool StixelsApplication::rectifyPolar()
 //     // NOTE: end of note
     
     // TODO: Remove, this is just for visualization
-//     cv::Mat Lt0, Rt0, Lt1, Rt1;
-//     
-//     mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Lt0, Lt1);
-//     mp_polarCalibration->getRectifiedImages(prevLeft, currLeft, Rt0, Rt1);
-//     
-//     m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
-//     m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
-//     m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
-//     m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
-//     
-//     boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
-//     boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
-//     boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
-//     boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
-//     
-//     opencv2gil(Lt0, viewLt0);
-//     opencv2gil(Rt0, viewRt0);
-//     opencv2gil(Lt1, viewLt1);
-//     opencv2gil(Rt1, viewRt1);
+    cv::Mat Lt0, Rt0, Lt1, Rt1;
+    
+    mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Lt0, Lt1);
+    mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Rt0, Rt1);
+    
+    m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
+    m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
+    m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
+    m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
+    
+    boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
+    boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
+    boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
+    boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
+    
+    opencv2gil(Lt0, viewLt0);
+    opencv2gil(Rt0, viewRt0);
+    opencv2gil(Lt1, viewLt1);
+    opencv2gil(Rt1, viewRt1);
         
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     

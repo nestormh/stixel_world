@@ -337,7 +337,7 @@ inline
 float MotionEvaluation::overlappingArea(const t_annotation& a, const t_annotation& b)
 {
     const float w = min(a.br.x, b.br.x) - max(a.ul.x, b.ul.x);
-    const float h = min(a.br.y, b.br.y) - max(a.ul.y, b.ul.y);
+    const float h = min(a.br.y, b.br.y) - max(a.ul.y, b.ul.y);    
     
     if ((w < 0) or (h < 0)) {
         return 0.0f;
@@ -347,13 +347,19 @@ float MotionEvaluation::overlappingArea(const t_annotation& a, const t_annotatio
 }
 
 inline
-bool MotionEvaluation::doOverlap(const t_annotation& a, const t_annotation& b)
+bool MotionEvaluation::doOverlap(const t_annotation& d, const t_annotation& gt)
 {
-    return ((a.ul.x <= b.br.x) &&
-            (a.br.x >= b.ul.x) &&
-            (a.ul.y <= b.br.y) &&
-            (a.br.y >= b.ul.y));
-                
+//     return ((a.ul.x <= b.br.x) &&
+//             (a.br.x >= b.ul.x) &&
+//             (a.ul.y <= b.br.y) &&
+//             (a.br.y >= b.ul.y));
+
+    bool dInGtX = (d.ul.x >= gt.ul.x) && (d.ul.x <= gt.br.x);
+    bool GtInDX = (gt.ul.x >= d.ul.x) && (gt.ul.x <= d.br.x);
+    bool dInGtY = (d.ul.y >= gt.ul.y) && (d.ul.y <= gt.br.y);
+    bool GtInDY = (gt.ul.y >= d.ul.y) && (gt.ul.y <= d.br.y);
+    
+    return (dInGtX || GtInDX) && (dInGtY || GtInDY);
 }
 
 
@@ -442,6 +448,13 @@ void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic
                 if (currStixel.bottom_y > currDetection.br.y) currDetection.br.y = currStixel.bottom_y;
             }
         }
+        
+//         uint32_t middleX = (gtAnnotation.ul.x + gtAnnotation.br.x) / 2.0;
+//         currDetection.ul.x = middleX;
+//         currDetection.br.x = middleX + 1;
+//         currDetection.ul.y = evolution[middleX].top_y;
+//         currDetection.br.y = evolution[middleX].bottom_y;
+        
         detections.push_back(currDetection);
     }
 }

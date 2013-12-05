@@ -51,6 +51,7 @@ private:
     void visualize();
     void visualize2();
     void visualize3();
+    void visualizeJustStixels();
     bool rectifyPolar();
     void transformStixels();
     

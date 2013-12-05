@@ -167,11 +167,11 @@ void StixelsTracker::compute()
 //     updateTracker();
     
 //     compute_static_stixels();
+    compute_motion_cost_matrix();
     if (m_useGraphs)
         computeMotionWithGraphs();
     else
-        compute_motion_cost_matrix();
-    compute_motion();
+        compute_motion();
 //     update_stixel_tracks_image();
     updateTracker();
 //     estimate_stixel_direction();
@@ -219,7 +219,7 @@ void StixelsTracker::compute_motion_cost_matrix()
     
     
     // Fill in the motion cost matrix
-    #pragma omp parallel for schedule(dynamic)
+//     #pragma omp parallel for schedule(dynamic)
     for( unsigned int s_current = 0; s_current < number_of_current_stixels; ++s_current )
     {
         const Stixel& current_stixel = ( *current_stixels_p )[ s_current ];
@@ -910,12 +910,12 @@ void StixelsTracker::computeMotionWithGraphs()
                     
                 const float & polarDist = m_stixelsPolarDistMatrix(rowIndex, currIdx);
                 
-//                 if (polarDist > 1.0f) {
+                if (polarDist > 1.0f) {
                     const float & cost = maxCost - motion_cost_matrix(rowIndex, currIdx);
                     
                     const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevIdx), graph.nodeFromId(currIdx + previous_stixels_p->size()));
                     costs[e] = cost;
-//                 }
+                }
             }
         }
     }
