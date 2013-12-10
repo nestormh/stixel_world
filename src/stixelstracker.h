@@ -58,6 +58,8 @@ public:
     typedef deque <stixels3d_t> t_historic;
     t_tracker getTracker() { return m_tracker; }
     t_historic getHistoric() { return m_stixelsHistoric; }
+    
+    stixels3d_t getLastStixelsAfterTracking();
 
 protected:    
     static const uint8_t MAX_DISPARITY = 128;

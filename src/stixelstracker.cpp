@@ -932,7 +932,8 @@ void StixelsTracker::computeMotionWithGraphs()
     for (uint32_t i = 0; i < previous_stixels_p->size(); i++) {
         if (graphMatcher.mate(graph.nodeFromId(i)) != lemon::INVALID) {
             lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
-            stixels_motion[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
+            if ((graph.id(graph.target(arc)) - previous_stixels_p->size()) != graph.id(graph.source(arc)))
+                stixels_motion[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
         }
     }
     
@@ -1081,6 +1082,8 @@ void StixelsTracker::projectPointInTopView(const cv::Point3d & point3d, const cv
     point2d.x = ((imgTop.cols / 2.0) * min(maxDistX, point3d.x) / maxDistX) + imgTop.cols / 2;
 }
 
+
+
 void StixelsTracker::drawTracker(cv::Mat& img, cv::Mat & imgTop)
 {
     
@@ -1200,4 +1203,16 @@ void StixelsTracker::drawTracker(cv::Mat& img)
 void StixelsTracker::drawDenseTracker(cv::Mat& img)
 {
     mp_denseTracker->drawTracks(img);
+}
+
+stixels3d_t StixelsTracker::getLastStixelsAfterTracking()
+{
+    stixels3d_t stixels;
+    stixels.reserve(m_tracker.size());
+    for (vector < stixels3d_t >::iterator it = m_tracker.begin(); it != m_tracker.end(); it++) {
+        if (it->size() > 1)
+            stixels.push_back(it->at(0));
+    }
+
+    return stixels;
 }
