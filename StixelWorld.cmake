@@ -18,13 +18,7 @@ find_package(SDL REQUIRED)
 find_package(PNG REQUIRED)
 find_package(Doppia REQUIRED)
 
-# TODO: Add as a configuration file
-set(POLAR_CALIBRATION_INCLUDE_PATH ${POLAR_CALIBRATION_PATH})
-set(POLAR_CALIBRATION_SRC 
-    ${POLAR_CALIBRATION_PATH}/polarcalibration.cpp 
-    ${POLAR_CALIBRATION_PATH}/calibration.pb.cc
-    ${POLAR_CALIBRATION_PATH}/visualizePolarCalibration.cpp)
-
+INCLUDE("${POLAR_CALIBRATION_PATH}/PolarCalibration.cmake")
 INCLUDE("${DENSE_TRACKER_PATH}/DenseTracker.cmake")
 
 set(STIXEL_WORLD_SRC
@@ -42,7 +36,7 @@ set(STIXEL_WORLD_SRC
 #     ${STIXEL_WORLD_PATH}/src/main.cpp
     
     ${DOPPIA_CPP_FILES}
-    ${POLAR_CALIBRATION_SRC}
+    ${POLAR_CALIBRATION_CPP_FILES}
     ${DENSETRACKER_CCFILES}
     ${DENSETRACKER_HFILES}
 )
@@ -54,7 +48,7 @@ set(STIXEL_WORLD_INCLUDE_DIRS
     ${PCL_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}
-    ${POLAR_CALIBRATION_INCLUDE_PATH}
+    ${POLAR_CALIBRATION_INCLUDE_DIRS}
     emon.a
     /usr/include/pcl-1.7  # This line is just to help kdevelop to index PCL includes (remove)
     ${DOPPIA_INCLUDE_DIRS}
