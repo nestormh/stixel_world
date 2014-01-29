@@ -39,7 +39,8 @@ public:
     
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
                                  const float & polar_dist_factor, const float & polar_sad_factor,
-                                 const float& dense_tracking_factor, const bool & useGraphs);
+                                 const float & dense_tracking_factor, const float & hist_similarity_factor, 
+                                 const bool & useGraphs);
     
     void updateDenseTracker(const cv::Mat & frame);
     
@@ -92,9 +93,14 @@ protected:
     
     void computeMotionWithGraphs();
     
+    void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);
+    float compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2);
+    void correctStixelsUsingTracking();
+    
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
     motion_cost_matrix_t m_denseTrackingMatrix;
+    motion_cost_matrix_t m_histogramComparisonMatrix;
     Eigen::MatrixXi m_maximal_pixelwise_motion_by_disp;
     
     boost::shared_ptr<PolarCalibration> mp_polarCalibration;
@@ -111,6 +117,7 @@ protected:
     float m_polar_dist_factor; // polar dist factor
     float m_polar_sad_factor;  // SAD in polar images
     float m_dense_tracking_factor; // Dense tracking
+    float m_hist_similarity_factor; // Histogram similarity
     
     bool m_useGraphs;
     
@@ -126,6 +133,8 @@ protected:
     
     double m_minAllowedObjectWidth;
     double m_minDistBetweenClusters;
+    
+    cv::Mat m_currImg;
 };
 }
 

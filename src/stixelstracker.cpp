@@ -33,6 +33,7 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <boost/graph/graph_concepts.hpp>
 
+#include<boost/foreach.hpp>
 #include <lemon/matching.h>
 #include <lemon/smart_graph.h>
 
@@ -53,6 +54,7 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
     m_stixelsPolarDistMatrix = Eigen::MatrixXf::Zero( motion_cost_matrix.rows(), motion_cost_matrix.cols() ); // Matrix is initialized with 0.
     m_polarSADMatrix = Eigen::MatrixXf::Zero( motion_cost_matrix.rows(), motion_cost_matrix.cols() ); // Matrix is initialized with 0.
     m_denseTrackingMatrix = Eigen::MatrixXf::Zero( motion_cost_matrix.rows(), motion_cost_matrix.cols() ); // Matrix is initialized with 0.
+    m_histogramComparisonMatrix = Eigen::MatrixXf::Zero( motion_cost_matrix.rows(), motion_cost_matrix.cols() ); // Matrix is initialized with 0.
     compute_maximum_pixelwise_motion_for_stixel_lut();
     
     m_sad_factor = 0.3f;
@@ -60,6 +62,7 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
     m_polar_dist_factor = 0.0f;
     m_polar_sad_factor = 0.0f;
     m_dense_tracking_factor = 0.7f;
+    m_hist_similarity_factor = 0.0f;
     
     m_minAllowedObjectWidth = 0.3;
     m_minDistBetweenClusters = 0.3;
@@ -68,21 +71,26 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
     
     m_useGraphs = true;
     
-    mp_denseTracker.reset(new dense_tracker::DenseTracker());
+//     mp_denseTracker.reset(new dense_tracker::DenseTracker());
 }
 
 void StixelsTracker::set_motion_cost_factors(const float& sad_factor, const float& height_factor, 
                                              const float& polar_dist_factor, const float & polar_sad_factor,
-                                             const float& dense_tracking_factor, const bool & useGraphs)
+                                             const float& dense_tracking_factor, const float & hist_similarity_factor, 
+                                             const bool & useGraphs)
 {
-    if ((sad_factor + height_factor + polar_dist_factor + polar_sad_factor + dense_tracking_factor) == 1.0) {
+    if ((sad_factor + height_factor + polar_dist_factor + polar_sad_factor + dense_tracking_factor + hist_similarity_factor) == 1.0) {
         m_sad_factor = sad_factor;
         m_height_factor = height_factor;
         m_polar_dist_factor = polar_dist_factor;
         m_polar_sad_factor = polar_sad_factor;
         m_dense_tracking_factor = dense_tracking_factor;
+        m_hist_similarity_factor = hist_similarity_factor;
+        if (m_dense_tracking_factor != 0)
+            mp_denseTracker.reset(new dense_tracker::DenseTracker());
     } else {
         cerr << "The sum of motion cost factors should be 1!!!" << endl;
+        exit(0);
     }
     
     m_useGraphs = useGraphs;
@@ -173,6 +181,8 @@ void StixelsTracker::compute()
     else
         compute_motion();
 //     update_stixel_tracks_image();
+    correctStixelsUsingTracking();
+    
     updateTracker();
 //     estimate_stixel_direction();
 //     getClusters();
@@ -189,22 +199,22 @@ void StixelsTracker::compute_motion_cost_matrix()
     
     const float maximum_allowed_real_height_difference = 0.5f;
     const float maximum_allowed_polar_distance = 50.0f;
-    
-    assert((m_sad_factor + m_height_factor + m_polar_dist_factor + m_polar_sad_factor + m_dense_tracking_factor) == 1.0f);
+    assert((m_sad_factor + m_height_factor + m_polar_dist_factor + m_polar_sad_factor + m_dense_tracking_factor + m_hist_similarity_factor) == 1.0f);
     
     const float maximum_real_motion = maximum_pedestrian_speed / video_frame_rate;
     
     const unsigned int number_of_current_stixels = current_stixels_p->size();
     const unsigned int number_of_previous_stixels = previous_stixels_p->size();
-        
-    mp_polarCalibration->getStoredRectifiedImages(m_polarImg1, m_polarImg2);
-    
-    mp_polarCalibration->getInverseMaps(m_mapXprev, m_mapYprev, 1);
-    mp_polarCalibration->getInverseMaps(m_mapXcurr, m_mapYcurr, 2);
-    
+
     cv::Mat currPolar2LinearX, currPolar2LinearY;
-    mp_polarCalibration->getMaps(currPolar2LinearX, currPolar2LinearY, 2);
-    
+    if (mp_polarCalibration) {
+        mp_polarCalibration->getStoredRectifiedImages(m_polarImg1, m_polarImg2);
+        
+        mp_polarCalibration->getInverseMaps(m_mapXprev, m_mapYprev, 1);
+        mp_polarCalibration->getInverseMaps(m_mapXcurr, m_mapYcurr, 2);
+        
+        mp_polarCalibration->getMaps(currPolar2LinearX, currPolar2LinearY, 2);
+    }
     
     motion_cost_matrix.fill( 0.f );
     pixelwise_sad_matrix.fill( 0.f );
@@ -212,11 +222,17 @@ void StixelsTracker::compute_motion_cost_matrix()
     m_stixelsPolarDistMatrix.fill(0.f);
     m_polarSADMatrix.fill(0.f);
     m_denseTrackingMatrix.fill(0.f);
+    m_histogramComparisonMatrix.fill(0.f);
     motion_cost_assignment_matrix.fill( false );
     
     current_stixel_depths.fill( 0.f );
     current_stixel_real_heights.fill( 0.f );
     
+    cv::MatND hist1, hist2;
+    cv::Mat lastImg = m_currImg;
+    if (lastImg.empty())
+        gil2opencv(previous_image_view, lastImg);
+    gil2opencv(current_image_view, m_currImg);
     
     // Fill in the motion cost matrix
 //     #pragma omp parallel for schedule(dynamic)
@@ -224,7 +240,11 @@ void StixelsTracker::compute_motion_cost_matrix()
     {
         const Stixel& current_stixel = ( *current_stixels_p )[ s_current ];
 //         const cv::Point2d current_polar = get_polar_point(mapXcurr, mapYcurr, current_stixel);
-        const cv::Point2d current_polar = get_polar_point(m_mapXcurr, m_mapYcurr, currPolar2LinearX, currPolar2LinearY, current_stixel);
+        cv::Point2d current_polar;
+        if (mp_polarCalibration)
+            current_polar = get_polar_point(m_mapXcurr, m_mapYcurr, currPolar2LinearX, currPolar2LinearY, current_stixel);
+        
+        if (m_hist_similarity_factor != 0.0) computeHistogram(hist1, m_currImg, current_stixel);
         
         const unsigned int stixel_horizontal_padding = compute_stixel_horizontal_padding( current_stixel );
         
@@ -246,7 +266,11 @@ void StixelsTracker::compute_motion_cost_matrix()
             {
                 const Stixel& previous_stixel = ( *previous_stixels_p )[ s_prev ];
 //                 const cv::Point2d previous_polar = get_polar_point(mapXprev, mapYprev, previous_stixel);
-                const cv::Point2d previous_polar = get_polar_point(m_mapXprev, m_mapYprev, currPolar2LinearX, currPolar2LinearY, previous_stixel);
+                cv::Point2d previous_polar;
+                if (mp_polarCalibration)
+                    previous_polar = get_polar_point(m_mapXprev, m_mapYprev, currPolar2LinearX, currPolar2LinearY, previous_stixel);
+                
+                if (m_hist_similarity_factor != 0.0) computeHistogram(hist2, lastImg, previous_stixel);
                 
                 if( previous_stixel.x - ( previous_stixel.width - 1 ) / 2 - stixel_horizontal_padding >= 0 &&
                     previous_stixel.x + ( previous_stixel.width - 1 ) / 2 + stixel_horizontal_padding < previous_image_view.width())
@@ -268,6 +292,7 @@ void StixelsTracker::compute_motion_cost_matrix()
                             float polar_distance;
                             float polar_SAD;
                             float denseTrackingScore;
+                            float histogramComparisonScore;
                             
                             if( current_stixel.type != Stixel::Occluded && previous_stixel.type != Stixel::Occluded )
                             {
@@ -277,6 +302,7 @@ void StixelsTracker::compute_motion_cost_matrix()
 //                                 polar_SAD = (m_polar_sad_factor == 0.0f)? 0.0f : compute_polar_SAD(current_stixel, previous_stixel, current_image_view, previous_image_view, stixel_horizontal_padding);
                                 polar_SAD = (m_polar_sad_factor == 0.0f)? 0.0f : compute_polar_SAD(current_stixel, previous_stixel);
                                 denseTrackingScore = (m_dense_tracking_factor == 0.0f)? 0.0f : compute_dense_tracking_score(current_stixel, previous_stixel);
+                                histogramComparisonScore = (m_hist_similarity_factor == 0.0)? 0.0f : compareHistogram(hist1, hist2, current_stixel, previous_stixel);
                             }
                             else
                             {
@@ -285,6 +311,7 @@ void StixelsTracker::compute_motion_cost_matrix()
                                 polar_distance = maximum_allowed_polar_distance;
                                 polar_SAD = maximum_pixel_value;
                                 denseTrackingScore = maximum_pixel_value;
+                                histogramComparisonScore = maximum_pixel_value;
                             }
                             
                             pixelwise_sad_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = pixelwise_sad;
@@ -297,6 +324,7 @@ void StixelsTracker::compute_motion_cost_matrix()
                             m_polarSADMatrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = maximum_pixel_value - polar_SAD;
                             
                             m_denseTrackingMatrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = denseTrackingScore;
+                            m_histogramComparisonMatrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = histogramComparisonScore * 255.0;
                             
                             motion_cost_assignment_matrix( pixelwise_motion + maximum_possible_motion_in_pixels, s_current ) = true;
                             
@@ -334,7 +362,8 @@ void StixelsTracker::compute_motion_cost_matrix()
                          m_height_factor * real_height_differences_matrix +
                          m_polar_dist_factor * m_stixelsPolarDistMatrix + 
                          m_polar_sad_factor * m_polarSADMatrix +
-                         m_dense_tracking_factor * m_denseTrackingMatrix;
+                         m_dense_tracking_factor * m_denseTrackingMatrix +
+                         m_hist_similarity_factor * m_histogramComparisonMatrix;
                          
     /*{
         cv::Mat scores(m_denseTrackingMatrix.rows(), m_denseTrackingMatrix.cols(), CV_8UC1);
@@ -927,8 +956,9 @@ void StixelsTracker::computeMotionWithGraphs()
     const lemon::SmartGraph::NodeMap<lemon::SmartGraph::Arc> & matchingMap = graphMatcher.matchingMap();
     
     // FIXME
-    BOOST_FOREACH(int32_t &i, stixels_motion)
-        i = -1;
+//     BOOST_FOREACH(int32_t &i, stixels_motion) {
+//         i = -1;
+//     }
     for (uint32_t i = 0; i < previous_stixels_p->size(); i++) {
         if (graphMatcher.mate(graph.nodeFromId(i)) != lemon::INVALID) {
             lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
@@ -936,8 +966,6 @@ void StixelsTracker::computeMotionWithGraphs()
                 stixels_motion[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
         }
     }
-    
-    
 }
 
 void StixelsTracker::updateTracker()
@@ -1215,4 +1243,143 @@ stixels3d_t StixelsTracker::getLastStixelsAfterTracking()
     }
 
     return stixels;
+}
+
+void StixelsTracker::computeHistogram(cv::Mat& hist, const cv::Mat& img, const Stixel& stixel)
+{
+    cv::Rect roi = cv::Rect(stixel.x, stixel.top_y, 1, stixel.bottom_y - stixel.top_y + 1);
+    
+    cv::Mat roiImg = img(roi);
+    
+    const int histSize = 64;
+    
+    cv::Mat roiGray;
+    cv::cvtColor(roiImg, roiGray, CV_BGR2GRAY);
+//     cv::imshow("roiImg", roiImg);
+//     roiImg.setTo(cv::Scalar(0, 0, 255));
+//     cv::imshow("computeHistogram", img);
+    
+    cv::calcHist(&roiGray, 1, 0, cv::Mat(), hist, 1, &histSize, 0);
+    normalize(hist, hist, 0, 255, CV_MINMAX, CV_32F);
+    
+//     // Visualization
+//     cv::Mat histImage = cv::Mat::ones(200, 320, CV_8U) * 255;
+// 
+// 
+//     histImage = cv::Scalar::all(255);
+//     int binW = cvRound((double)histImage.cols/histSize);
+// 
+//     for( int i = 0; i < histSize; i++ ) {
+//         cout << "hist[" << i << "] = " << hist.at<float>(i) << endl;
+//         cv::rectangle( histImage, cv::Point(i*binW, histImage.rows),
+//                     cv::Point((i+1)*binW, histImage.rows - cvRound(hist.at<float>(i))),
+//                     cv::Scalar::all(0), -1, 8, 0 );
+//     }
+//     imshow("histogram", histImage);
+    
+//     cv::waitKey(0);
+}
+
+float StixelsTracker::compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2) {
+//     if (stixel1.x != 320)
+//         return 0.0f;
+//     
+//     cv::Mat tmp1, tmp2;
+//     gil2opencv(previous_image_view, tmp2);
+//     m_currImg.copyTo(tmp1);
+//     
+//     cv::line(tmp1, cv::Point2d(stixel1.x, stixel1.top_y), 
+//              cv::Point2d(stixel1.x, stixel1.bottom_y), cv::Scalar(0, 0, 255), 1);
+//     cv::line(tmp2, cv::Point2d(stixel2.x, stixel2.top_y), 
+//              cv::Point2d(stixel2.x, stixel2.bottom_y), cv::Scalar(0, 0, 255), 1);
+//     
+//     cv::imshow("currImg", tmp1);
+//     cv::imshow("prevImg", tmp2);
+// 
+//     const int histSize = 64;
+//     cv::Mat histImage1 = cv::Mat::ones(256, 320, CV_8U) * 255;
+//     cv::Mat histImage2 = cv::Mat::ones(256, 320, CV_8U) * 255;
+// 
+//     histImage1 = cv::Scalar::all(255);
+//     histImage2 = cv::Scalar::all(255);
+// 
+//     int binW = cvRound((double)histImage1.cols/histSize);
+// 
+//     for( int i = 0; i < histSize; i++ ) {
+//         cv::rectangle( histImage1, cv::Point(i*binW, histImage1.rows),
+//                     cv::Point((i+1)*binW, histImage1.rows - cvRound(hist1.at<float>(i))),
+//                     cv::Scalar::all(0), -1, 8, 0 );
+//         cv::rectangle( histImage2, cv::Point(i*binW, histImage2.rows),
+//                        cv::Point((i+1)*binW, histImage2.rows - cvRound(hist2.at<float>(i))),
+//                        cv::Scalar::all(0), -1, 8, 0 );
+//     }
+//     cv::imshow("histogramCurr", histImage1);
+//     cv::imshow("histogramPrev", histImage2);
+//     
+//     cv::waitKey(0);
+//     
+//     float compCorrel = cv::compareHist(hist1, hist2, CV_COMP_CORREL);
+//     float compChisq = cv::compareHist(hist1, hist1, CV_COMP_CHISQR);
+//     float compIntersect = cv::compareHist(hist1, hist1, CV_COMP_INTERSECT);
+    float compBhatta = cv::compareHist(hist1, hist2, CV_COMP_BHATTACHARYYA);
+//     float compHellinger = cv::compareHist(hist1, hist2, CV_COMP_HELLINGER);
+//     
+//     cout << "compCorrel " << compCorrel << ", compChisq " << compChisq << ", compIntersect " << compIntersect 
+//     << ", compBhatta " << compBhatta << ", compHellinger " << compHellinger << endl;
+    
+    
+//     return (1.0 - compCorrel);
+    return compBhatta;
+}
+
+void StixelsTracker::correctStixelsUsingTracking() {
+    cv::Mat deltaImg = cv::Mat::zeros(320, m_currImg.cols, CV_8UC3);
+    
+    uint32_t diffThresh = 10;
+    cv::Scalar color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+    for (uint32_t i = 1; i < stixels_motion.size(); i++) {
+        if (stixels_motion[i] != -1) {
+            const int height = i - stixels_motion[i];
+            
+            if ((stixels_motion[i] - stixels_motion[i - 1]) > diffThresh)
+                color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+            
+            cv::line(deltaImg, cv::Point2d(i, 100), cv::Point2d(i, 100 + height), color, 1);
+        }
+    }
+    diffThresh = 5;
+    for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
+        const int height = abs(current_stixels_p->at(i).bottom_y - current_stixels_p->at(i - 1).bottom_y);
+        
+        if (height > diffThresh)
+            color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+        
+        cv::line(deltaImg, cv::Point2d(i, 200), cv::Point2d(i, 200 + height), color, 1);
+    }
+    
+    
+    cv::imshow("deltaImg", deltaImg);
+    
+    ////////////////////////////////////////////////////////////////
+    cv::Mat img(m_currImg);
+    
+    BOOST_FOREACH(const Stixel & stixel, *previous_stixels_p) {
+        img.at<cv::Vec3b>(stixel.bottom_y, stixel.x) = cv::Vec3b(0, 0, 255);
+    }
+    BOOST_FOREACH(const Stixel & stixel, *current_stixels_p) {
+        img.at<cv::Vec3b>(stixel.bottom_y, stixel.x) = cv::Vec3b(0, 255, 0);
+    }
+    
+    for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
+        if (current_stixels_p->at(i).bottom_y != current_stixels_p->at(i - 1).bottom_y) {
+            cv::line(img, cv::Point2d(current_stixels_p->at(i).x, current_stixels_p->at(i).bottom_y),
+                     cv::Point2d(current_stixels_p->at(i).x, img.rows - 1), cv::Scalar(0, 255, 0), 1);
+        }
+        if (previous_stixels_p->at(i).bottom_y != previous_stixels_p->at(i - 1).bottom_y) {
+            cv::line(img, cv::Point2d(previous_stixels_p->at(i).x, previous_stixels_p->at(i).bottom_y),
+                     cv::Point2d(previous_stixels_p->at(i).x, 0), cv::Scalar(0, 0, 255), 1);
+        }
+    }
+    
+    cv::imshow("StixelsEvol", img);
 }

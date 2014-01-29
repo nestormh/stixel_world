@@ -31,6 +31,7 @@
 #include "stereo_matching/stixels/AbstractStixelWorldEstimator.hpp"
 #include "stereo_matching/stixels/motion/DummyStixelMotionEstimator.hpp"
 #include "stixelstracker.h"
+#include "oflowtracker.h"
 
 #include<pcl_ros/point_cloud.h>
 
@@ -68,6 +69,7 @@ private:
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
     boost::shared_ptr<StixelsTracker> mp_stixel_motion_estimator;
+    boost::shared_ptr<oFlowTracker> mp_stixel_oflow_motion_estimator;
     boost::shared_ptr<MotionEvaluation> mp_stixel_motion_evaluator;
     
     vector< boost::shared_ptr<StixelsTracker> > mp_stixels_tests;
@@ -89,7 +91,9 @@ private:
     
     uint32_t m_waitTime;
     
-    cv::Mat m_currLeft;
+    cv::Mat m_currLeft, m_currRight;
+    
+    bool m_doPolarCalib;
     
     ros::Publisher m_pointCloudPub;
     tf::TransformBroadcaster m_map2odomTfBroadcaster;

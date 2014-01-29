@@ -78,7 +78,7 @@ StixelsApplication::StixelsApplication(const string& optionsFile)
         new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
                             mp_stixel_world_estimator->get_stixel_width(),
                             mp_polarCalibration) );
-        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, true);
+        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true);
         
         mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
     } else {

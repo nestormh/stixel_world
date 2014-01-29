@@ -19,7 +19,9 @@ find_package(catkin REQUIRED COMPONENTS
 
 set(ROS_BUILD_TYPE Debug)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp -msse3")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp -msse3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -fopenmp -msse3")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native -fopenmp -msse3")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -march=native -std=c++0x")
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
@@ -31,7 +33,7 @@ set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 # set(Boost_USE_STATIC_RUNTIME OFF) 
 find_package(Boost 1.49.0 COMPONENTS filesystem system)
 # find_package(Boost 1.49.0)
-# find_package(CUDA 5.0 REQUIRED)
+find_package(CUDA 5.0 REQUIRED)
 find_package( Eigen3    REQUIRED )
 find_package(OpenCV  REQUIRED )
 # find_package(Motif  REQUIRED )
@@ -49,6 +51,7 @@ find_package(OpenCV  REQUIRED )
 
 INCLUDE("${POLAR_CALIBRATION_PATH}/PolarCalibration.cmake")
 INCLUDE("${STIXEL_WORLD_PATH}/StixelWorld.cmake")
+INCLUDE("${CUDALK_PATH}/cudaLK.cmake")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
