@@ -66,6 +66,12 @@ protected:
     static const uint8_t MAX_DISPARITY = 128;
     static const uint8_t MAX_ITERATIONS_STORED = 51;
     
+    typedef struct {
+        cv::Rect roi;
+        double z;
+        stixels3d_t stixels;
+    } t_obstacle;
+    
     void estimate_stixel_direction();
     void compute_static_stixels();
     void compute_motion_cost_matrix();
@@ -130,6 +136,8 @@ protected:
     
     vector<int32_t> m_clusters;
     vector < vector<int> > m_objects;
+    
+    vector < t_obstacle> m_obstacles;
     
     double m_minAllowedObjectWidth;
     double m_minDistBetweenClusters;

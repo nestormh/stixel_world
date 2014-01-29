@@ -1333,52 +1333,173 @@ float StixelsTracker::compareHistogram(const cv::Mat& hist1, const cv::Mat& hist
 }
 
 void StixelsTracker::correctStixelsUsingTracking() {
-    cv::Mat deltaImg = cv::Mat::zeros(320, m_currImg.cols, CV_8UC3);
-    
-    uint32_t diffThresh = 10;
-    cv::Scalar color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-    for (uint32_t i = 1; i < stixels_motion.size(); i++) {
-        if (stixels_motion[i] != -1) {
-            const int height = i - stixels_motion[i];
-            
-            if ((stixels_motion[i] - stixels_motion[i - 1]) > diffThresh)
-                color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-            
-            cv::line(deltaImg, cv::Point2d(i, 100), cv::Point2d(i, 100 + height), color, 1);
-        }
-    }
-    diffThresh = 5;
-    for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
-        const int height = abs(current_stixels_p->at(i).bottom_y - current_stixels_p->at(i - 1).bottom_y);
-        
-        if (height > diffThresh)
-            color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-        
-        cv::line(deltaImg, cv::Point2d(i, 200), cv::Point2d(i, 200 + height), color, 1);
-    }
-    
-    
-    cv::imshow("deltaImg", deltaImg);
-    
-    ////////////////////////////////////////////////////////////////
-    cv::Mat img(m_currImg);
-    
-    BOOST_FOREACH(const Stixel & stixel, *previous_stixels_p) {
-        img.at<cv::Vec3b>(stixel.bottom_y, stixel.x) = cv::Vec3b(0, 0, 255);
-    }
-    BOOST_FOREACH(const Stixel & stixel, *current_stixels_p) {
-        img.at<cv::Vec3b>(stixel.bottom_y, stixel.x) = cv::Vec3b(0, 255, 0);
-    }
+    lemon::SmartGraph graph;
+    lemon::SmartGraph::EdgeMap <int> costs(graph);
+    lemon::SmartGraph::NodeMap <uint32_t> nodeIdx(graph);
+    vector <int> discontPrev, discontCurr;
     
     for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
-        if (current_stixels_p->at(i).bottom_y != current_stixels_p->at(i - 1).bottom_y) {
-            cv::line(img, cv::Point2d(current_stixels_p->at(i).x, current_stixels_p->at(i).bottom_y),
-                     cv::Point2d(current_stixels_p->at(i).x, img.rows - 1), cv::Scalar(0, 255, 0), 1);
-        }
         if (previous_stixels_p->at(i).bottom_y != previous_stixels_p->at(i - 1).bottom_y) {
-            cv::line(img, cv::Point2d(previous_stixels_p->at(i).x, previous_stixels_p->at(i).bottom_y),
-                     cv::Point2d(previous_stixels_p->at(i).x, 0), cv::Scalar(0, 0, 255), 1);
+            discontPrev.push_back(i);
+            nodeIdx[graph.addNode()] = i;
         }
+        if (current_stixels_p->at(i).bottom_y != current_stixels_p->at(i - 1).bottom_y) {
+            discontCurr.push_back(i);
+            nodeIdx[graph.addNode()] = i;
+        }
+    }
+    
+    // TODO: Add arcs that are just in the vicinity of the current node
+    for (uint32_t prevIdx = 0; prevIdx < discontPrev.size(); prevIdx++) {
+        int stixelPrevIdx = discontPrev[prevIdx];
+        Stixel stixelPrev = previous_stixels_p->at(stixelPrevIdx);
+        Stixel3d stixel3dPrev(stixelPrev);
+        stixel3dPrev.update3dcoords(stereo_camera);
+        
+        for (uint32_t currIdx = 0, currNodeIdx = discontPrev.size(); currIdx < discontCurr.size(); currIdx++, currNodeIdx++) {
+//             const int & cost = (current_stixels_p->size() * 2) 
+//                                - abs(discontPrev[prevIdx] - discontCurr[currIdx])
+//                                - abs(previous_stixels_p->at(discontPrev[prevIdx]).bottom_y - current_stixels_p->at(discontCurr[currIdx]).bottom_y);
+
+            int stixelCurrIdx = discontCurr[currIdx];
+            Stixel stixelCurr = current_stixels_p->at(stixelCurrIdx);
+            Stixel3d stixel3dCurr(stixelCurr);
+            stixel3dCurr.update3dcoords(stereo_camera);
+            
+            const int & cost = 100.0 - sqrt(
+                (stixel3dPrev.bottom3d.x - stixel3dCurr.bottom3d.x) * (stixel3dPrev.bottom3d.x - stixel3dCurr.bottom3d.x) + 
+                (stixel3dPrev.bottom3d.y - stixel3dCurr.bottom3d.y) * (stixel3dPrev.bottom3d.y - stixel3dCurr.bottom3d.y) + 
+                (stixel3dPrev.bottom3d.z - stixel3dCurr.bottom3d.z) * (stixel3dPrev.bottom3d.z - stixel3dCurr.bottom3d.z)
+            );
+            
+            const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevIdx), 
+                                                              graph.nodeFromId(currNodeIdx));
+            costs[e] = cost;
+        }
+        
+    }
+    
+    lemon::MaxWeightedMatching< lemon::SmartGraph, lemon::SmartGraph::EdgeMap <int> > graphMatcher(graph, costs);
+    
+    graphMatcher.run();
+    
+    const lemon::SmartGraph::NodeMap<lemon::SmartGraph::Arc> & matchingMap = graphMatcher.matchingMap();
+
+    vector <int> targets(current_stixels_p->size(), -1);
+    vector <int> sources(previous_stixels_p->size(), -1);
+    for (uint32_t prevIdx = 0; prevIdx < discontPrev.size(); prevIdx++) {
+        if (graphMatcher.mate(graph.nodeFromId(prevIdx)) != lemon::INVALID) {
+            lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(prevIdx)];
+            
+            const int & srcStixelIdx = discontPrev[graph.id(graph.source(arc))];
+            const int & tgtStixelIdx = discontCurr[graph.id(graph.target(arc)) - discontPrev.size()];
+            
+            targets[srcStixelIdx] = tgtStixelIdx;
+            sources[tgtStixelIdx] = srcStixelIdx;
+        }
+    }
+//     for (uint32_t prevIdx = 0; prevIdx < discontPrev.size(); prevIdx++) {
+//         if (graphMatcher.mate(graph.nodeFromId(prevIdx)) != lemon::INVALID) {
+//             lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(prevIdx)];
+//             
+//             const uint32_t & srcStixelIdx = discontPrev[graph.id(graph.source(arc))];
+//             const uint32_t & tgtStixelIdx = discontCurr[graph.id(graph.target(arc)) - discontPrev.size()];
+//             
+//             const Stixel & sourceStixel = previous_stixels_p->at(srcStixelIdx);
+//             const Stixel & targetStixel = current_stixels_p->at(tgtStixelIdx);
+//         }
+//     }
+    
+    m_obstacles.clear();
+    int & stixelIdxL = discontCurr[0];
+    Stixel stixelL = current_stixels_p->at(stixelIdxL);
+    Stixel3d stixel3dL(stixelL);
+    stixel3dL.update3dcoords(stereo_camera);
+    t_obstacle currObstacle;
+    currObstacle.stixels.push_back(stixel3dL);
+//     BOOST_FOREACH(int & stixelIdxR, discontCurr) {
+    for (uint32_t i = 0; i < discontCurr.size(); i++) {
+        int & stixelIdxR = discontCurr[i];
+        
+        if (abs(stixelIdxR - sources[stixelIdxR]) > 20)
+            continue;
+        
+        const Stixel stixelR = current_stixels_p->at(stixelIdxR);
+        Stixel3d stixel3dR(stixelR);
+        stixel3dR.update3dcoords(stereo_camera);
+        
+        cout << stixelL.x << ", " << stixelR.x << endl;
+        
+        if (fabs(stixel3dR.bottom3d.z - stixel3dL.bottom3d.z) > 1.0) {
+            cout << "End of obstacle at " << stixelR.x << endl;
+            
+            // TODO: Get values from stored stixels
+            currObstacle.roi.x = stixelL.x;
+            currObstacle.roi.y = stixelL.top_y;
+            currObstacle.roi.width = stixelR.x - stixelL.x;
+            currObstacle.roi.height = stixelL.bottom_y - stixelL.top_y + 1;
+            currObstacle.z = stixel3dL.bottom3d.z;
+            
+            cout << "ROI: " << currObstacle.roi << endl;
+            
+            // TODO: Obstacles are just added if they are wide enough
+            if (currObstacle.roi.width > 10)
+                m_obstacles.push_back(currObstacle);
+            
+            cout << "stixelL " << __LINE__ << ", " << stixelL.x << endl;
+            stixelL = stixelR;
+            cout << "stixelL " << __LINE__ << ", " << stixelL.x << endl;
+            stixel3dL = stixel3dR;
+            currObstacle.stixels.clear();
+            currObstacle.stixels.push_back(stixel3dL);
+//             exit(0);
+        }
+    }
+    
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // VISUALIZATION
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    cv::Mat img;
+    m_currImg.copyTo(img);
+
+    for (uint32_t prevIdx = 0; prevIdx < discontPrev.size(); prevIdx++) {
+        if (graphMatcher.mate(graph.nodeFromId(prevIdx)) != lemon::INVALID) {
+            lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(prevIdx)];
+            
+            const uint32_t & srcStixelIdx = discontPrev[graph.id(graph.source(arc))];
+            const uint32_t & tgtStixelIdx = discontCurr[graph.id(graph.target(arc)) - discontPrev.size()];
+
+            const Stixel & sourceStixel = previous_stixels_p->at(srcStixelIdx);
+            const Stixel & targetStixel = current_stixels_p->at(tgtStixelIdx);
+            
+            cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+            cv::line(img, cv::Point2d(sourceStixel.x, sourceStixel.bottom_y),
+                     cv::Point2d(targetStixel.x, targetStixel.bottom_y), 
+                     color, 1);
+            
+            color = cv::Scalar(0, 255, 0);
+            if (abs(srcStixelIdx - tgtStixelIdx) > 40)
+                color = cv::Scalar(0, 0, 255);
+            cv::line(img, cv::Point2d(targetStixel.x, targetStixel.bottom_y),
+                     cv::Point2d(targetStixel.x, img.rows - 1), color, 1);
+            
+//             cout << srcStixelIdx << " -> " << tgtStixelIdx << " = " << abs(srcStixelIdx - tgtStixelIdx) << endl;
+        }
+    }
+    
+    string text = "0000";
+    int fontFace = cv::FONT_ITALIC;
+    double fontScale = 0.5;
+    int thickness = 1;
+    for (uint32_t i = 0; i < m_obstacles.size(); i++) {
+        cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+        cv::rectangle(img, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
+                      cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
+                      color, 1);
+        cv::putText(img, text, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y - 10), 
+                    fontFace, fontScale, cv::Scalar::all(255), thickness);
+        cv::putText(img, text, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y - 20), 
+                    fontFace, fontScale, cv::Scalar::all(255), thickness);
     }
     
     cv::imshow("StixelsEvol", img);
