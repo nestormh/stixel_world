@@ -46,9 +46,9 @@ public:
     cv::Vec2d direction;
     
     template<class T>
-    T getBottom2d() { return T(x, bottom_y); }
+    T getBottom2d() const { return T(x, bottom_y); }
     template<class T>
-    T getTop2d() { return T(x, top_y); }
+    T getTop2d() const { return T(x, top_y); }
 };
 
 typedef std::vector<Stixel3d> stixels3d_t;

@@ -101,7 +101,8 @@ protected:
     
     void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);
     float compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2);
-    void correctStixelsUsingTracking();
+    void trackObstacles();
+    void computeObstacles();
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
@@ -138,6 +139,9 @@ protected:
     vector < vector<int> > m_objects;
     
     vector < t_obstacle> m_obstacles;
+    vector <int> m_currObstacleCorresp;
+    vector <int> m_prevObstacleCorresp;
+    vector < deque < t_obstacle> > m_obstaclesTracker;
     
     double m_minAllowedObjectWidth;
     double m_minDistBetweenClusters;

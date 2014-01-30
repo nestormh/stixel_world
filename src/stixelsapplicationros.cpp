@@ -195,7 +195,8 @@ void StixelsApplicationROS::runStixelsApplication()
     
     double startWallTime = omp_get_wtime();
     while (iterate()) {
-        visualize();
+//         visualize();
+        waitForKey(&m_waitTime);
 //         publishStixels();
         update();
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
