@@ -20,6 +20,7 @@ message(CUDALK_SRC_CU ${CUDALK_SRC_CU})
 cuda_add_executable(stixels_world_node 
     ${CUDALK_SRC_CU}
     ${STIXEL_WORLD_SRC}
+    kalmanfilter.cpp 
     oflowtracker.cpp
     stixelsapplicationros.cpp
     mainStixels.cpp

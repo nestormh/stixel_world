@@ -67,9 +67,17 @@ protected:
     static const uint8_t MAX_ITERATIONS_STORED = 51;
     
     typedef struct {
+        typedef struct {
+            cv::Point3d min;
+            cv::Point3d max;
+            cv::Point3d mean;
+            
+            double width, length, height;
+        } t_roi3d;
+        
         cv::Rect roi;
-        double z;
         stixels3d_t stixels;
+        t_roi3d roi3d;
     } t_obstacle;
     
     void estimate_stixel_direction();
@@ -98,6 +106,7 @@ protected:
     void projectPointInTopView(const cv::Point3d & point3d, const cv::Mat & imgTop, cv::Point2d & point2d);
     
     void computeMotionWithGraphs();
+    void computeMotionWithGraphsAndHistogram();
     
     void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);
     float compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2);

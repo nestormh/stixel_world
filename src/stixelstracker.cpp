@@ -38,6 +38,8 @@
 #include <lemon/matching.h>
 #include <lemon/smart_graph.h>
 
+#include "kalmanfilter.h"
+
 #include "utils.h"
 
 using namespace std;
@@ -176,17 +178,31 @@ void StixelsTracker::compute()
 //     updateTracker();
     
 //     compute_static_stixels();
-    compute_motion_cost_matrix();
-    if (m_useGraphs)
-        computeMotionWithGraphs();
-    else
+//     compute_motion_cost_matrix();
+//     if (m_useGraphs) {
+//         computeMotionWithGraphs();
+// //         computeMotionWithGraphsAndHistogram();
+//     } else {
+//         compute_motion();
+//     }
+// //     update_stixel_tracks_image();
+//     trackObstacles();
+//     
+//     updateTracker();
+// //     estimate_stixel_direction();
+// //     getClusters();
+    ///////////////////////////////////////
+//     compute_motion_cost_matrix();
+    if (m_useGraphs) {
+//         computeMotionWithGraphs();
+                computeMotionWithGraphsAndHistogram();
+    } else {
         compute_motion();
-//     update_stixel_tracks_image();
+    }
+    //     update_stixel_tracks_image();
     trackObstacles();
     
     updateTracker();
-//     estimate_stixel_direction();
-//     getClusters();
     
     return;
 }
@@ -907,6 +923,100 @@ void StixelsTracker::draw_polar_SAD(cv::Mat& img, const Stixel& stixel1, const S
     }
 }
 
+void StixelsTracker::computeMotionWithGraphsAndHistogram()
+{
+    lemon::SmartGraph graph;
+    lemon::SmartGraph::EdgeMap <float> costs(graph);
+    lemon::SmartGraph::NodeMap <uint32_t> nodeIdx(graph);
+    graph.reserveNode(current_stixels_p->size() + previous_stixels_p->size());
+    graph.reserveEdge(current_stixels_p->size() * previous_stixels_p->size());
+    
+    BOOST_FOREACH (const Stixel & stixel, *previous_stixels_p)
+    nodeIdx[graph.addNode()] = stixel.x;
+    BOOST_FOREACH (const Stixel & stixel, *current_stixels_p)
+    nodeIdx[graph.addNode()] = stixel.x;
+    
+    cv::MatND hist1, hist2;
+    cv::Mat lastImg = m_currImg;
+    if (lastImg.empty())
+        gil2opencv(previous_image_view, lastImg);
+    gil2opencv(current_image_view, m_currImg);
+    BOOST_FOREACH (const Stixel & currStixel, *current_stixels_p) {
+        const uint32_t & maxMotionForStixel = compute_maximum_pixelwise_motion_for_stixel( currStixel );
+        
+        computeHistogram(hist1, m_currImg, currStixel);
+        
+        for (uint32_t stixelIdx = max((int)0, (int)(currStixel.x - maxMotionForStixel)); 
+             stixelIdx <= min((int)(previous_stixels_p->size() - 1), (int)(currStixel.x + maxMotionForStixel)); stixelIdx++) {
+         
+            const Stixel & prevStixel = previous_stixels_p->at(stixelIdx);
+        
+            computeHistogram(hist2, lastImg, prevStixel);
+        
+//             cout << "Comparing " << prevStixel.x << " and " << currStixel.x << endl;
+        const int32_t pixelwise_motion = prevStixel.x - currStixel.x;
+        const int32_t pixelwise_motionY = fabs(prevStixel.bottom_y - currStixel.bottom_y);
+        
+            if( pixelwise_motion >= -( int( maxMotionForStixel ) ) &&
+                pixelwise_motion <= int( maxMotionForStixel ) &&
+                pixelwise_motionY <= int( maxMotionForStixel ) &&
+                ( currStixel.type != Stixel::Occluded && prevStixel.type != Stixel::Occluded )) {
+                    
+                float histogramComparisonScore = 1.0 - compareHistogram(hist1, hist2, currStixel, prevStixel);
+                
+                const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevStixel.x), graph.nodeFromId(currStixel.x + previous_stixels_p->size()));
+                costs[e] = histogramComparisonScore;
+                
+            }
+        }
+    }
+    
+//     const float maxCost = motion_cost_matrix.maxCoeff();
+//     for (uint32_t prevIdx = 0; prevIdx < previous_stixels_p->size(); prevIdx++) {
+//         const Stixel & prevStixel = previous_stixels_p->at(prevIdx);
+//         for (uint32_t currIdx = 0; currIdx < current_stixels_p->size(); currIdx++) {
+//             const Stixel & currStixel = current_stixels_p->at(currIdx);
+//             
+//             const int32_t pixelwise_motion = prevStixel.x - currStixel.x;
+//             const uint32_t & maximum_motion_in_pixels_for_current_stixel = compute_maximum_pixelwise_motion_for_stixel( currStixel );
+//             
+//             const int32_t pixelwise_motionY = fabs(prevStixel.bottom_y - currStixel.bottom_y);
+//             
+//             const uint32_t rowIndex = pixelwise_motion + maximum_possible_motion_in_pixels;
+//             
+//             if( pixelwise_motion >= -( int( maximum_motion_in_pixels_for_current_stixel ) ) &&
+//                 pixelwise_motion <= int( maximum_motion_in_pixels_for_current_stixel ) &&
+//                 pixelwise_motionY <= int( maximum_motion_in_pixels_for_current_stixel ) &&
+//                 (motion_cost_assignment_matrix(rowIndex, currIdx))) {
+//                 
+//                 const float & polarDist = m_stixelsPolarDistMatrix(rowIndex, currIdx);
+//             
+// //                 if (polarDist > 1.0f) {
+//                     const float & cost = maxCost - motion_cost_matrix(rowIndex, currIdx);
+//                     
+//                     const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevIdx), graph.nodeFromId(currIdx + previous_stixels_p->size()));
+//                     costs[e] = cost;
+// //                 }
+//             }
+//         }
+//     }
+    
+    lemon::MaxWeightedMatching< lemon::SmartGraph, lemon::SmartGraph::EdgeMap <float> > graphMatcher(graph, costs);
+    
+    graphMatcher.run();
+    
+    const lemon::SmartGraph::NodeMap<lemon::SmartGraph::Arc> & matchingMap = graphMatcher.matchingMap();
+    
+    stixels_motion = vector<int>(current_stixels_p->size(), -1);
+    for (uint32_t i = 0; i < previous_stixels_p->size(); i++) {
+        if (graphMatcher.mate(graph.nodeFromId(i)) != lemon::INVALID) {
+            lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
+            if ((graph.id(graph.target(arc)) - previous_stixels_p->size()) != graph.id(graph.source(arc)))
+                stixels_motion[graph.id(graph.target(arc)) - previous_stixels_p->size()] = graph.id(graph.source(arc));
+        }
+    }
+}
+
 void StixelsTracker::computeMotionWithGraphs()
 {
     lemon::SmartGraph graph;
@@ -1364,7 +1474,10 @@ void StixelsTracker::computeObstacles() {
             currObstacle.roi.x = stixelL.x;
             currObstacle.roi.y = stixelL.top_y;
             currObstacle.roi.height = stixelL.bottom_y;
-            currObstacle.z = 0;
+            currObstacle.roi3d.mean = cv::Point3d(0, 0, 0);
+            currObstacle.roi3d.min = cv::Point3d(numeric_limits<double>::max(), 0.0, numeric_limits<double>::max());
+            currObstacle.roi3d.max = cv::Point3d(numeric_limits<double>::min(), numeric_limits<double>::min(), numeric_limits<double>::min());
+//             currObstacle.roi3d.mean.z = 0;
             for (uint32_t j = stixel3dL.getBottom2d<cv::Point2d>().x; j < stixel3dR.getBottom2d<cv::Point2d>().x; j++) {
                 const Stixel stixel = current_stixels_p->at(j);
                 Stixel3d stixel3d(stixel);
@@ -1373,16 +1486,30 @@ void StixelsTracker::computeObstacles() {
                 
                 currObstacle.roi.y = min(stixel.top_y, currObstacle.roi.y);
                 currObstacle.roi.height = max(currObstacle.roi.height, stixel.bottom_y);
-                currObstacle.z += stixel3d.bottom3d.z;
+                
+                currObstacle.roi3d.mean += stixel3d.bottom3d;
+                
+                currObstacle.roi3d.min.x = min(currObstacle.roi3d.min.x, stixel3d.bottom3d.x);
+                currObstacle.roi3d.min.z = min(currObstacle.roi3d.min.z, stixel3d.bottom3d.z);
+
+                currObstacle.roi3d.max.x = max(currObstacle.roi3d.max.x, stixel3d.bottom3d.x);
+                currObstacle.roi3d.max.y = max(currObstacle.roi3d.max.y, stixel3d.bottom3d.y);
+                currObstacle.roi3d.max.z = max(currObstacle.roi3d.max.z, stixel3d.bottom3d.z);
             }
             
             currObstacle.roi.width = stixelR.x - stixelL.x;
             currObstacle.roi.height -= currObstacle.roi.y - 1;
-            currObstacle.z /= currObstacle.stixels.size();
+            currObstacle.roi3d.mean.x /= currObstacle.stixels.size();
+            currObstacle.roi3d.mean.y = 0.0;
+            currObstacle.roi3d.mean.z /= currObstacle.stixels.size();
             
+            currObstacle.roi3d.width = currObstacle.roi3d.max.x - currObstacle.roi3d.min.x;
+            currObstacle.roi3d.height = currObstacle.roi3d.max.y;
+            currObstacle.roi3d.length = currObstacle.roi3d.max.z - currObstacle.roi3d.min.z;
             // TODO: Parameterize
             // TODO: Use 3d width and height to filter
-            if (currObstacle.roi.width > 10) {
+            if ((currObstacle.roi.width > 10) &&
+                (currObstacle.roi.height > 40)) {
                 BOOST_FOREACH(const Stixel3d & stixel, currObstacle.stixels) {
                     m_currObstacleCorresp[stixel.getBottom2d<cv::Point2i>().x] = m_obstacles.size();
                 }
@@ -1440,19 +1567,19 @@ void StixelsTracker::trackObstacles()
             }
         }
     }
-    cout << "   ";
-    for (uint32_t j = 0; j < m_obstacles.size(); j++) {
-        cout << j << "   ";
-    }
-    cout << endl;
-    for (uint32_t i = 0; i < prevObstacles.size(); i++) {
-        cout << i << ": ";
-        for (uint32_t j = 0; j < m_obstacles.size(); j++) {
-            cout << correspondences.at<int>(i, j) + 1 << "   ";
-        }
-        cout << endl;
-    }
-    cout << endl;
+//     cout << "   ";
+//     for (uint32_t j = 0; j < m_obstacles.size(); j++) {
+//         cout << j << "   ";
+//     }
+//     cout << endl;
+//     for (uint32_t i = 0; i < prevObstacles.size(); i++) {
+//         cout << i << ": ";
+//         for (uint32_t j = 0; j < m_obstacles.size(); j++) {
+//             cout << correspondences.at<int>(i, j) + 1 << "   ";
+//         }
+//         cout << endl;
+//     }
+//     cout << endl;
     
     for (uint32_t i = 0; i < prevObstacles.size(); i++) {
         for (uint32_t j = 0; j < m_obstacles.size(); j++) {
@@ -1479,7 +1606,7 @@ void StixelsTracker::trackObstacles()
     for (uint32_t i = 0; i < prevObstacles.size(); i++) {
         if (graphMatcher.mate(graph.nodeFromId(i)) != lemon::INVALID) {
             lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
-            cout << i << " -> " << graph.id(graph.target(arc)) - prevObstacles.size() << endl;
+//             cout << i << " -> " << graph.id(graph.target(arc)) - prevObstacles.size() << endl;
             int currIdx = graph.id(graph.target(arc)) - prevObstacles.size();
             deque <t_obstacle> & track = prevObstaclesTracker[i];
             track.push_front(m_obstacles[currIdx]);
@@ -1540,6 +1667,7 @@ void StixelsTracker::trackObstacles()
     BOOST_FOREACH(const deque<t_obstacle> & track, m_obstaclesTracker) {
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         
+        double speed = 0.0;
         for (uint32_t i = 1; i < track.size(); i++) {
             cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y), 
                      cv::Point2i(track[i - 1].roi.x, track[i - 1].roi.y), color, 1);
@@ -1552,12 +1680,25 @@ void StixelsTracker::trackObstacles()
             cv::rectangle(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y),
                           cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y + track[i].roi.height),
                           color, 1);
+            speed += sqrt((track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) * (track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) +
+//                           (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) * (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) + 
+                          (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z) * (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z));
         }
-        if (track.size() != 0)
+        speed /= track.size() * 0.07692307692307692308;
+        if (track.size() != 0) {
             cv::rectangle(roiImgTrack, cv::Point2i(track[0].roi.x, track[0].roi.y),
                       cv::Point2i(track[0].roi.x + track[0].roi.width, track[0].roi.y + track[0].roi.height),
                       color, 1);
+            
+            t_obstacle lastObstacle = track[track.size() - 1];
+            cv::rectangle(roiImgTrack, cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y),
+                          cv::Point2i(lastObstacle.roi.x + 20, lastObstacle.roi.y - 10), cv::Scalar::all(255), -1);
+            stringstream oss;
+            oss << speed;
+            cv::putText(roiImgTrack, oss.str(), cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
+        }
     }
+    
     
     cv::imshow("StixelsEvol", img);
 }
