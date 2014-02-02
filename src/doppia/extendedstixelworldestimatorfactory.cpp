@@ -38,6 +38,8 @@
 
 #include <string>
 
+#include <iostream>
+
 #include "extendedstixelworldestimatorfactory.h"
 
 namespace stixel_world {
@@ -85,6 +87,7 @@ ExtendedStixelWorldEstimatorFactory::new_instance(const variables_map &options,
     const AbstractVideoInput::dimensions_t &input_dimensions = video_input.get_left_image().dimensions();
     const MetricStereoCamera &camera = video_input.get_metric_camera();
     
+    cout << "VideoInput" << endl;
     VideoFromFiles *video_input_p = dynamic_cast<VideoFromFiles*>(&video_input);
     
     return new_instance(options, input_dimensions, camera,

@@ -38,6 +38,10 @@
 #include <lemon/matching.h>
 #include <lemon/smart_graph.h>
 
+#include <algorithm>
+
+#include <ros/ros.h>
+
 #include "kalmanfilter.h"
 
 #include "utils.h"
@@ -192,17 +196,34 @@ void StixelsTracker::compute()
 // //     estimate_stixel_direction();
 // //     getClusters();
     ///////////////////////////////////////
-//     compute_motion_cost_matrix();
+double startWallTime = omp_get_wtime();
+#if 1    // New tracking style
+    
+    compute_motion_cost_matrix();
     if (m_useGraphs) {
-//         computeMotionWithGraphs();
-                computeMotionWithGraphsAndHistogram();
+        computeMotionWithGraphs();
+//         computeMotionWithGraphsAndHistogram();
     } else {
         compute_motion();
     }
     //     update_stixel_tracks_image();
     trackObstacles();
     
+//     updateTracker();
+#else // Old tracking style
+        compute_motion_cost_matrix();
+    if (m_useGraphs) {
+        computeMotionWithGraphs();
+//         computeMotionWithGraphsAndHistogram();
+    } else {
+        compute_motion();
+    }
+    update_stixel_tracks_image();
+//     trackObstacles();
+
     updateTracker();
+#endif
+ROS_ERROR("[TIMES] Time %f", omp_get_wtime() - startWallTime);
     
     return;
 }
@@ -1477,6 +1498,7 @@ void StixelsTracker::computeObstacles() {
             currObstacle.roi3d.mean = cv::Point3d(0, 0, 0);
             currObstacle.roi3d.min = cv::Point3d(numeric_limits<double>::max(), 0.0, numeric_limits<double>::max());
             currObstacle.roi3d.max = cv::Point3d(numeric_limits<double>::min(), numeric_limits<double>::min(), numeric_limits<double>::min());
+            vector<uint32_t> disparities(64, 0);
 //             currObstacle.roi3d.mean.z = 0;
             for (uint32_t j = stixel3dL.getBottom2d<cv::Point2d>().x; j < stixel3dR.getBottom2d<cv::Point2d>().x; j++) {
                 const Stixel stixel = current_stixels_p->at(j);
@@ -1495,6 +1517,8 @@ void StixelsTracker::computeObstacles() {
                 currObstacle.roi3d.max.x = max(currObstacle.roi3d.max.x, stixel3d.bottom3d.x);
                 currObstacle.roi3d.max.y = max(currObstacle.roi3d.max.y, stixel3d.bottom3d.y);
                 currObstacle.roi3d.max.z = max(currObstacle.roi3d.max.z, stixel3d.bottom3d.z);
+                
+                disparities[stixel.disparity]++;
             }
             
             currObstacle.roi.width = stixelR.x - stixelL.x;
@@ -1506,6 +1530,17 @@ void StixelsTracker::computeObstacles() {
             currObstacle.roi3d.width = currObstacle.roi3d.max.x - currObstacle.roi3d.min.x;
             currObstacle.roi3d.height = currObstacle.roi3d.max.y;
             currObstacle.roi3d.length = currObstacle.roi3d.max.z - currObstacle.roi3d.min.z;
+            
+            int maxValue = 0;
+            currObstacle.disparity = 0;
+            for (uint32_t j = 0; j < disparities.size(); j++) {
+                if (disparities[j] > maxValue) {
+                    maxValue = disparities[j];
+                    currObstacle.disparity = j;
+                }
+            }
+            
+            currObstacle.disparity = *max_element(disparities.begin(),disparities.end());
             // TODO: Parameterize
             // TODO: Use 3d width and height to filter
             if ((currObstacle.roi.width > 10) &&
@@ -1618,6 +1653,7 @@ void StixelsTracker::trackObstacles()
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // VISUALIZATION
     ////////////////////////////////////////////////////////////////////////////////////////////////////
+    return;
     cv::Mat img = cv::Mat::zeros(m_currImg.rows * 2, m_currImg.cols * 2, CV_8UC3);
     cv::Rect roi(0, 0, m_currImg.cols, m_currImg.rows);
     cv::Mat roiImgPrev = img(roi);

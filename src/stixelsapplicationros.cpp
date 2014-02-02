@@ -195,8 +195,8 @@ void StixelsApplicationROS::runStixelsApplication()
     
     double startWallTime = omp_get_wtime();
     while (iterate()) {
-//         visualize();
-        waitForKey(&m_waitTime);
+        visualize();
+//         waitForKey(&m_waitTime);
 //         publishStixels();
         update();
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
@@ -237,14 +237,15 @@ bool StixelsApplicationROS::iterate()
 {
     const double & startWallTime = omp_get_wtime();
     
-    
     if ((mp_video_input->get_current_frame_number() == mp_video_input->get_number_of_frames()) || (! mp_video_input->next_frame()))
         return false;
+    
+    cout << "Frame " << mp_video_input->get_current_frame_number() << endl;
     
     doppia::AbstractVideoInput::input_image_view_t
                         left_view(mp_video_input->get_left_image()),
                         right_view(mp_video_input->get_right_image());  
-            
+                        
     gil2opencv(mp_video_input->get_left_image(), m_currLeft);
     gil2opencv(mp_video_input->get_right_image(), m_currRight);
     mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
@@ -278,7 +279,10 @@ bool StixelsApplicationROS::iterate()
 //             mp_stixels_tests[i]->compute();
 //     }
     
-//     mp_stixel_motion_evaluator->evaluate(mp_video_input->get_current_frame_number() - 1);
+//     mp_stixel_motion_evaluator->evaluatePerFrame(mp_video_input->get_current_frame_number() - 1);
+//     mp_stixel_motion_evaluator->evaluatePerFrameWithObstacles(mp_video_input->get_current_frame_number() - 1);
+    mp_stixel_motion_evaluator->evaluateDisparity(left_view, right_view,
+                                                  mp_video_input->get_current_frame_number() - 1);
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     

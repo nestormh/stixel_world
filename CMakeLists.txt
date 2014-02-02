@@ -52,6 +52,8 @@ find_package(OpenCV  REQUIRED )
 INCLUDE("${POLAR_CALIBRATION_PATH}/PolarCalibration.cmake")
 INCLUDE("${STIXEL_WORLD_PATH}/StixelWorld.cmake")
 INCLUDE("${CUDALK_PATH}/cudaLK.cmake")
+INCLUDE("${LIBELAS_PATH}/libElas.cmake")
+
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)

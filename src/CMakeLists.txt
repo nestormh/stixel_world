@@ -17,9 +17,11 @@ endif (CUDA_VERBOSE_PTXAS)
 #################################################################
 message(CUDALK_SRC_CU ${CUDALK_SRC_CU})
 
-cuda_add_executable(stixels_world_node 
-    ${CUDALK_SRC_CU}
+add_executable(stixels_world_node 
+#     ${CUDALK_SRC_CU}
     ${STIXEL_WORLD_SRC}
+    ${LIBELAS_SRC_FILES}
+    doppia/extendedvideoinput.cpp 
     kalmanfilter.cpp 
     oflowtracker.cpp
     stixelsapplicationros.cpp
@@ -27,7 +29,8 @@ cuda_add_executable(stixels_world_node
 )
 
 include_directories(stixels_world_node
-    ${CUDALK_INCLUDE_DIRS}
+#     ${CUDALK_INCLUDE_DIRS}
+    ${LIBELAS_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}/pcl-1.7
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}

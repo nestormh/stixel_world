@@ -25,14 +25,21 @@
 #include <boost/iostreams/filter/gzip.hpp>
 
 #include <boost/format.hpp>
+#include <boost/foreach.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/graph/graph_concepts.hpp>
+#include <tiff.h>
+#include "utils.h"
+
+#include <deque>
+
+#include <opencv2/contrib/contrib.hpp>
 
 #include <helpers/xyz_indices.hpp>
 
 #include "stixelstracker.h"
-#include <../../GPUCPD/src/LU-Decomposition/Libs/Cuda/include/CL/cl_platform.h>
-#include <../../GPUCPD/src/LU-Decomposition/Libs/Cuda/include/device_launch_parameters.h>
+
+#include "elas.h"
 
 namespace stixel_world {
     
@@ -312,16 +319,89 @@ void MotionEvaluation::evaluate(const uint32_t & currentFrame)
             getAnnotationsFromTracks(historic, j, currentFrame, detections);
                     
             vector < t_annotation> annotations = m_annotations[currentFrame];
-            uint32_t tmpTp, tmpFn;
-            countErrors(0.0f, annotations, detections, tmpTp, tmpFn);
+            uint32_t tmpTp, tmpFn, tmpFp;
+            countErrors(0.0f, annotations, detections, tmpTp, tmpFn, tmpFp);
 
             handler.counters[j - 1].tp += tmpTp;
             handler.counters[j - 1].fn += tmpFn;
+            handler.counters[j - 1].fp += tmpFp;
         }
     }
     
     if (currentFrame % 10 == 0)
         saveResults();
+}
+
+void MotionEvaluation::evaluatePerFrame(const uint32_t & currentFrame)
+{
+    if ((currentFrame < MAX_LENGTH + 1) || (! m_evaluationActivated))
+        return;
+    
+    BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
+        handler.counters.clear();
+        handler.counters.resize(MAX_LENGTH);
+        const StixelsTracker::t_historic & historic = (handler.p_stixel_motion_estimator)->getHistoric();
+        for (uint32_t j = 1; j <= MAX_LENGTH; j++) {
+            const uint32_t evaluatedFrame = currentFrame - j;
+            
+            vector< t_annotation > detections;
+            getAnnotationsFromTracks(historic, j, currentFrame, detections);
+            
+            vector < t_annotation> annotations = m_annotations[currentFrame];
+            uint32_t tmpTp, tmpFn, tmpFp;
+            countErrors(0.0f, annotations, detections, tmpTp, tmpFn, tmpFp);
+            
+            handler.counters[j - 1].tp += tmpTp;
+            handler.counters[j - 1].fn += tmpFn;
+            handler.counters[j - 1].fp += tmpFp;
+            
+        }
+        // TODO: Write to file
+        for (uint32_t i = 0; i < handler.counters.size(); i++) {
+            ROS_ERROR("[EVALUATION %d] TP %d FP %d FN %d", i, handler.counters[i].tp, handler.counters[i].fp, handler.counters[i].fn);
+//             cout << i << "-> TP:" << handler.counters[i].tp << ", " << 
+//                     "FP:" << handler.counters[i].fp << ", " << 
+//                     "FN:" << handler.counters[i].fn << endl;
+        }
+    }
+//     if (currentFrame % 10 == 0)
+//         saveResults();
+}
+
+void MotionEvaluation::evaluatePerFrameWithObstacles(const uint32_t & currentFrame)
+{
+    if ((currentFrame <= MAX_LENGTH) || (! m_evaluationActivated))
+        return;
+    
+    BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
+        handler.counters.clear();
+        handler.counters.resize(MAX_LENGTH);
+//         const StixelsTracker::t_historic & historic = (handler.p_stixel_motion_estimator)->getHistoric();
+        const StixelsTracker::t_obstaclesTracker & obstaclesTracker = (handler.p_stixel_motion_estimator)->getObstaclesTracker();
+        for (uint32_t j = 0; j < MAX_LENGTH; j++) {
+            const uint32_t evaluatedFrame = currentFrame - j;
+            
+            vector< t_annotation > detections;
+            getAnnotationsFromObstacleTracks(obstaclesTracker, j, detections);
+            
+            vector < t_annotation> annotations = m_annotations[currentFrame];
+            uint32_t tmpTp, tmpFn, tmpFp;
+            countErrors(0.0f, annotations, detections, tmpTp, tmpFn, tmpFp);
+            
+            handler.counters[j].tp += tmpTp;
+            handler.counters[j].fn += tmpFn;
+            handler.counters[j].fp += tmpFp;
+        }
+        // TODO: Write to file
+        for (uint32_t i = 0; i < handler.counters.size(); i++) {
+//             cout << i << "-> TP:" << handler.counters[i].tp << ", " << 
+//                     "FP:" << handler.counters[i].fp << ", " << 
+//                     "FN:" << handler.counters[i].fn << endl;
+            ROS_ERROR("[EVALUATION %d] TP %d FP %d FN %d", i, handler.counters[i].tp, handler.counters[i].fp, handler.counters[i].fn);
+        }
+    }
+    //     if (currentFrame % 10 == 0)
+    //         saveResults();
 }
 
 inline
@@ -366,19 +446,20 @@ bool MotionEvaluation::doOverlap(const t_annotation& d, const t_annotation& gt)
 bool MotionEvaluation::intersectionOverUnionCriterion(const t_annotation& detection, const t_annotation& gt, const float& p)
 {
     const float & intersectionArea = overlappingArea(detection, gt);
-    const float unionArea = area(detection) + area(gt) - intersectionArea;
+//     const float unionArea = area(detection) + area(gt) - intersectionArea;
+    const float unionArea = area(gt);
     
     const float intersectionOverUnion = intersectionArea / unionArea;
 
-//     cout << "intersectionArea = " << intersectionArea << ", unionArea = " << unionArea << ", intersectionOverUnion = " << intersectionOverUnion << ", ";
+//     cout << "intersectionArea = " << intersectionArea << ", unionArea = " << unionArea << ", intersectionOverUnion = " << intersectionOverUnion << endl;
     
     return intersectionOverUnion > p;
 }
 
 void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t_annotation >& gt, const vector< t_annotation >& detections,
-                                   uint32_t& tp, uint32_t& fn)
+                                   uint32_t& tp, uint32_t& fn, uint32_t& fp)
 {
-    const float p = 0.5f;
+    const float p = 0.3f;
     
     vector< t_annotation > tmpGT(gt.size()), tmpDetections(detections.size());
     copy(gt.begin(), gt.end(), tmpGT.begin());
@@ -387,14 +468,14 @@ void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t
     typedef vector< t_annotation >::iterator annIt;
     for (annIt itGT = tmpGT.begin(); itGT != tmpGT.end(); itGT++) {
         const t_annotation & gtAnnotation = *itGT;
-
+        
         bool found = false;
         for (annIt itDet = tmpDetections.begin(); itDet != tmpDetections.end(); itDet++) {
             const t_annotation & detectionAnnotation = *itDet;
             
             if (doOverlap(detectionAnnotation, gtAnnotation) &&
                 intersectionOverUnionCriterion(detectionAnnotation, gtAnnotation, p)) {
-                    
+                
                     itGT = tmpGT.erase(itGT);
                     itDet = tmpDetections.erase(itDet);
                     
@@ -407,6 +488,7 @@ void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t
     }
     
     tp = detections.size() - tmpDetections.size();
+    fp = tmpDetections.size();
     fn = tmpGT.size();
 }
 
@@ -457,6 +539,165 @@ void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic
         
         detections.push_back(currDetection);
     }
+}
+
+void MotionEvaluation::getAnnotationsFromObstacleTracks(const StixelsTracker::t_obstaclesTracker & tracker, const uint32_t& idx,
+                                                        vector< t_annotation >& detections)
+{
+    detections.resize(tracker.size());
+    
+    BOOST_FOREACH (const deque < StixelsTracker::t_obstacle> & track, tracker) {
+        if (track.size() > idx) {
+            const StixelsTracker::t_obstacle & obstacle = track[idx];
+            
+            t_annotation annotation;
+            annotation.ul = cv::Point2i(obstacle.roi.x, obstacle.roi.y);
+            annotation.br = cv::Point2i(obstacle.roi.x + obstacle.roi.width, obstacle.roi.y + obstacle.roi.height);
+            
+            detections.push_back(annotation);
+        }
+    }
+}
+
+void MotionEvaluation::visualizeDisparityMap(const cv::Mat & map, cv::Mat & falseColorsMap, cv::Mat & scaledMap) {
+    double min;
+    double max;
+    cv::minMaxIdx(map, &min, &max);
+    max = 64;
+    min = 0;
+    // expand your range to 0..255. Similar to histEq();
+    map.convertTo(scaledMap,CV_8UC1, 255 / (max-min), min); 
+    
+    // this is great. It converts your grayscale image into a tone-mapped one, 
+    // much more pleasing for the eye
+    // function is found in contrib module, so include contrib.hpp 
+    // and link accordingly
+    applyColorMap(scaledMap, falseColorsMap, cv::COLORMAP_JET);
+}
+
+void MotionEvaluation::evaluateDisparity(const doppia::AbstractVideoInput::input_image_view_t& leftView, 
+                                         const doppia::AbstractVideoInput::input_image_view_t& rightView,
+                                         const uint32_t & currentFrame)
+{
+    cv::Mat left, right;
+    cv::Mat leftGray, rightGray;
+    cv::Mat dispELAS, scaledMapELAS, colorMapELAS, maskELAS;
+    cv::Mat dispStixels, scaledMapStixels, colorMapStixels, maskStixels;
+    cv::Mat dispObjects, scaledMapObjects, colorMapObjects, maskObjects;
+    gil2opencv(leftView, right);
+    gil2opencv(rightView, left);
+    
+    cv::cvtColor(left, leftGray, CV_BGR2GRAY);
+    cv::cvtColor(right, rightGray, CV_BGR2GRAY);
+    
+    Elas elas(Elas::parameters(Elas::ROBOTICS));
+    
+    dispELAS = cv::Mat(left.rows, left.cols, CV_64F);
+    
+    int32_t dims[3];
+    dims[0] = leftGray.cols;
+    dims[1] = leftGray.rows;
+    dims[2] = leftGray.cols;
+    
+    float * D1 = new float[leftGray.cols * leftGray.rows];
+    float * D2 = new float[rightGray.cols * rightGray.rows];
+    
+    elas.process((uint8_t *)leftGray.data, (uint8_t *)rightGray.data, D1, D2, dims);
+    
+    for (uint32_t y = 0; y < leftGray.rows; y++) {
+        for (uint32_t x = 0; x < leftGray.cols; x++) {
+            dispELAS.at<double>(y, x) = D1[y * leftGray.cols + x];
+        }
+    }
+    
+    delete D1;
+    delete D2;
+    
+    visualizeDisparityMap(dispELAS, colorMapELAS, scaledMapELAS);
+    cv::threshold(scaledMapELAS, maskELAS, 0, 255, cv::THRESH_BINARY);
+//     cv::imshow("colorMapELAS", colorMapELAS);
+//     cv::imshow("maskELAS", maskELAS);
+//     cv::imshow("scaledMapELAS", scaledMapELAS);
+    
+    ///////////////////////////////////////////////////////////////////////////////////
+    dispStixels = cv::Mat::zeros(left.rows, left.cols, CV_64F);
+    
+    BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
+        const stixels_t stixels = handler.p_stixel_world_estimator->get_stixels();
+        BOOST_FOREACH(const Stixel & stixel, stixels) {
+            const int & disp = stixel.disparity;
+            
+            for (uint32_t y = stixel.top_y; y <= stixel.bottom_y; y++) {
+                if (stixel.x + disp < dispStixels.cols) {
+                    if (dispStixels.at<double>(y, stixel.x + disp) == 0)
+                        dispStixels.at<double>(y, stixel.x + disp) = 64.0 - disp;
+                    else
+                        dispStixels.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispStixels.at<double>(y, stixel.x + disp));
+                }
+            }
+        }
+        visualizeDisparityMap(dispStixels, colorMapStixels, scaledMapStixels);
+        cv::threshold(scaledMapStixels, maskStixels, 0, 255, cv::THRESH_BINARY);
+//         cv::imshow("colorMapStixels", colorMapStixels);
+//         cv::imshow("scaledMapStixels", scaledMapStixels);
+//         cv::imshow("maskStixels", maskStixels);
+        cv::Mat maskStixelsandELAS; 
+        cv::bitwise_and(maskStixels, maskELAS, maskStixelsandELAS);
+// //         cv::imshow("maskStixelsandELAS", maskStixelsandELAS);
+        cv::Mat diffStixelsAndELAS;
+        cv::absdiff(scaledMapELAS, scaledMapStixels, diffStixelsAndELAS);
+//         cv::imshow("diffStixelsAndELAS0", diffStixelsAndELAS);
+        cv::bitwise_and(maskStixelsandELAS, diffStixelsAndELAS, diffStixelsAndELAS);
+//         cv::imshow("diffStixelsAndELAS", diffStixelsAndELAS);
+        
+        cv::Scalar avgDiffStixelsELAS = cv::mean(diffStixelsAndELAS, maskStixelsandELAS);
+        
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        const StixelsTracker::t_obstaclesTracker & obstaclesTracker = (handler.p_stixel_motion_estimator)->getObstaclesTracker();
+
+        dispObjects = cv::Mat::zeros(left.rows, left.cols, CV_64F);
+
+        BOOST_FOREACH (const deque < StixelsTracker::t_obstacle> & track, obstaclesTracker) {
+            
+            if (track.size() == 0)
+                continue;
+            
+            const StixelsTracker::t_obstacle & obstacle = track[0];
+            
+            const int & disp = obstacle.disparity;
+            BOOST_FOREACH(const Stixel3d & stixel, obstacle.stixels) {
+                const int & disp = stixel.disparity;
+                for (uint32_t y = stixel.top_y; y <= stixel.bottom_y; y++) {
+                    if (stixel.x + disp < dispObjects.cols) {
+                        if (dispObjects.at<double>(y, stixel.x + disp) == 0)
+                            dispObjects.at<double>(y, stixel.x + disp) = 64.0 - disp;
+                        else
+                            dispObjects.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispObjects.at<double>(y, stixel.x + disp));
+                    }
+                }
+            }
+        }
+        visualizeDisparityMap(dispObjects, colorMapObjects, scaledMapObjects);
+        cv::threshold(scaledMapObjects, maskObjects, 0, 255, cv::THRESH_BINARY);
+//                 cv::imshow("colorMapObjects", colorMapObjects);
+//                 cv::imshow("scaledMapObjects", scaledMapObjects);
+//                 cv::imshow("maskObjects", maskObjects);
+        cv::Mat maskObjectsandELAS; 
+        cv::bitwise_and(maskObjects, maskELAS, maskObjectsandELAS);
+//                 cv::imshow("maskObjectsandELAS", maskObjectsandELAS);
+        cv::Mat diffObjectsAndELAS;
+        cv::absdiff(scaledMapELAS, scaledMapObjects, diffObjectsAndELAS);
+//                 cv::imshow("diffObjectsAndELAS0", diffObjectsAndELAS);
+        cv::bitwise_and(maskObjectsandELAS, diffObjectsAndELAS, diffObjectsAndELAS);
+//                 cv::imshow("diffObjectsAndELAS", diffObjectsAndELAS);
+        
+        cv::Scalar avgDiffELASObjects = cv::mean(diffObjectsAndELAS, maskObjectsandELAS);
+        cv::Scalar avgDiffELASObjectsMaskStixels = cv::mean(diffObjectsAndELAS, maskStixelsandELAS);
+
+        ROS_ERROR("[EVALUATION_DISP] avgDiffStixelsELAS %f avgDiffELASObjects %f avgDiffELASObjectsMaskStixels %f", 
+                  avgDiffStixelsELAS[0], avgDiffELASObjects[0], avgDiffELASObjectsMaskStixels[0]);
+    }
+    
 }
 
 }

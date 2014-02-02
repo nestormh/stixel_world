@@ -55,17 +55,6 @@ public:
     float getDenseTrackingFactor() { return m_dense_tracking_factor; }
     bool useGraphs() { return m_useGraphs; }
     
-    typedef vector < stixels3d_t > t_tracker;
-    typedef deque <stixels3d_t> t_historic;
-    t_tracker getTracker() { return m_tracker; }
-    t_historic getHistoric() { return m_stixelsHistoric; }
-    
-    stixels3d_t getLastStixelsAfterTracking();
-
-protected:    
-    static const uint8_t MAX_DISPARITY = 128;
-    static const uint8_t MAX_ITERATIONS_STORED = 51;
-    
     typedef struct {
         typedef struct {
             cv::Point3d min;
@@ -78,7 +67,22 @@ protected:
         cv::Rect roi;
         stixels3d_t stixels;
         t_roi3d roi3d;
+        int32_t disparity;
     } t_obstacle;
+    
+    typedef vector < deque < t_obstacle> > t_obstaclesTracker;
+    typedef vector < stixels3d_t > t_tracker;
+    typedef deque <stixels3d_t> t_historic;
+    
+    t_tracker getTracker() const { return m_tracker; }
+    t_historic getHistoric() const{ return m_stixelsHistoric; }
+    t_obstaclesTracker getObstaclesTracker() const { return m_obstaclesTracker; }
+    
+    stixels3d_t getLastStixelsAfterTracking();
+
+protected:    
+    static const uint8_t MAX_DISPARITY = 128;
+    static const uint8_t MAX_ITERATIONS_STORED = 51;
     
     void estimate_stixel_direction();
     void compute_static_stixels();
@@ -150,6 +154,7 @@ protected:
     vector < t_obstacle> m_obstacles;
     vector <int> m_currObstacleCorresp;
     vector <int> m_prevObstacleCorresp;
+    
     vector < deque < t_obstacle> > m_obstaclesTracker;
     
     double m_minAllowedObjectWidth;

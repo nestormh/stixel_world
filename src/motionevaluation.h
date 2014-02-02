@@ -21,12 +21,16 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem/path.hpp>
 
+#include <ros/ros.h>
+
 #include "stixelstracker.h"
 
 #include "stereo_matching/stixels/Stixel.hpp"
 #include "stereo_matching/stixels/stixels.pb.h"
 #include "stereo_matching/stixels/AbstractStixelWorldEstimator.hpp"
 #include "helpers/data/DataSequence.hpp"
+
+#include <video_input/AbstractVideoInput.hpp>
 
 #include <string>
 #include <opencv2/opencv.hpp>
@@ -35,7 +39,7 @@ using namespace std;
 
 namespace stixel_world {
     
-#define MAX_LENGTH 51
+#define MAX_LENGTH 2 //51
     
 typedef struct {
     cv::Point2i ul;
@@ -48,6 +52,7 @@ typedef struct {
 typedef struct {
     uint32_t tp;
     uint32_t fn;
+    uint32_t fp;
     double recallSum;
     uint32_t totalExamples;
 } t_statistics_counter;
@@ -72,6 +77,11 @@ public:
                                   const boost::shared_ptr<StixelsTracker> & p_stixel_motion_estimator);
     
     void evaluate(const uint32_t & currentFrame);
+    void evaluatePerFrame(const uint32_t & currentFrame);
+    void evaluatePerFrameWithObstacles(const uint32_t & currentFrame);
+    void evaluateDisparity(const doppia::AbstractVideoInput::input_image_view_t & leftView, 
+                           const doppia::AbstractVideoInput::input_image_view_t & rightView,
+                           const uint32_t & currentFrame);
 
 protected:
     void parseArguments(const boost::program_options::variables_map &options);
@@ -94,10 +104,14 @@ protected:
     bool intersectionOverUnionCriterion(const t_annotation & detection, const t_annotation & gt, const float & p);
     bool doOverlap(const t_annotation & a, const t_annotation & b);
     void countErrors(const float& detectionThresh, const vector< t_annotation >& gt, const vector< t_annotation >& detections,
-                     uint32_t& tp, uint32_t& fn);
+                     uint32_t& tp, uint32_t& fn, uint32_t& fp);
     
     void getAnnotationsFromTracks(const StixelsTracker::t_historic & historic, const uint32_t& idx, const uint32_t & currentFrame,
                                   vector< t_annotation >& detections);
+    void getAnnotationsFromObstacleTracks(const StixelsTracker::t_obstaclesTracker & tracker, const uint32_t& idx,
+                                                            vector< t_annotation >& detections);
+    
+    void visualizeDisparityMap(const cv::Mat & map, cv::Mat & falseColorsMap, cv::Mat & scaledMap);
     
     void saveResults();
 };
