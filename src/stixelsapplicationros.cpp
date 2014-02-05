@@ -21,6 +21,8 @@
 
 #include "doppia/extendedstixelworldestimatorfactory.h"
 
+#include "doppia/extendedvideoinputfactory.h"
+
 #include "utils.h"
 #include "fundamentalmatrixestimator.h"
 
@@ -60,6 +62,29 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     
     m_doPolarCalib = false;
     
+    ros::NodeHandle nh("~");
+    m_pointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("pointCloudStixels", 1);
+    double m_SADFactor, m_heightFactor, m_polarDistFactor, m_polarSADFactor, m_histBatFactor;
+    nh.param("useGraph", m_useGraph, true);
+    nh.param("useCostMatrix", m_useCostMatrix, true);
+    nh.param("useObjects", m_useObjects, true);
+    
+    nh.param("SADFactor", m_SADFactor, 0.0);
+    nh.param("heightFactor", m_heightFactor, 0.0);
+    nh.param("polarDistFactor", m_polarDistFactor, 0.0);
+    nh.param("polarSADFactor", m_polarSADFactor, 0.0);
+    nh.param("histBatFactor", m_histBatFactor, 0.0);
+    
+    cout << "m_useGraph " << m_useGraph << endl;
+    cout << "m_useCostMatrix " << m_useCostMatrix << endl;
+    cout << "m_useObjects " << m_useObjects << endl;
+    cout << "m_SADFactor " << m_SADFactor << endl;
+    cout << "heightFactor " << m_heightFactor << endl;
+    cout << "m_polarDistFactor " << m_polarDistFactor << endl;
+    cout << "m_polarSADFactor " << m_polarSADFactor << endl;
+    cout << "m_histBatFactor " << m_histBatFactor << endl;
+    cout << "***********************" << endl;
+    
 //     NOTE: This is just for fast tuning of the motion estimators
 //     mp_stixels_tests.resize(6);
 //     for (uint32_t i = 0; i < mp_stixels_tests.size(); i++) {
@@ -84,14 +109,18 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
 // end of NOTE
     
     if (mp_stixels_tests.size() == 0) {
-        m_doPolarCalib = false;
+        m_doPolarCalib = true;
         if (m_doPolarCalib)
             mp_polarCalibration.reset(new PolarCalibration());
         mp_stixel_motion_estimator.reset( 
         new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
                             mp_stixel_world_estimator->get_stixel_width(),
                             mp_polarCalibration) );
-        mp_stixel_motion_estimator->set_motion_cost_factors(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true);
+        
+//         mp_stixel_motion_estimator->set_motion_cost_factors(0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f, true);
+        mp_stixel_motion_estimator->set_motion_cost_factors(m_SADFactor, m_heightFactor, m_polarDistFactor, 
+                                                            m_polarSADFactor, 0.0f, m_histBatFactor, 
+                                                            m_useGraph, m_useCostMatrix, m_useObjects);
         mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
 //         mp_stixel_oflow_motion_estimator.reset(new oFlowTracker());
         
@@ -102,9 +131,9 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     
     m_waitTime = 0;
     
-    ros::NodeHandle nh("~");
-    m_pointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("pointCloudStixels", 1);
     m_accTime = 0.0;
+    
+    m_firstIteration = true;
         
     return;
 }
@@ -195,8 +224,8 @@ void StixelsApplicationROS::runStixelsApplication()
     
     double startWallTime = omp_get_wtime();
     while (iterate()) {
-        visualize();
-//         waitForKey(&m_waitTime);
+//         visualize();
+        waitForKey(&m_waitTime);
 //         publishStixels();
         update();
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
@@ -262,8 +291,11 @@ bool StixelsApplicationROS::iterate()
         mp_stixel_motion_estimator->updateDenseTracker(m_currLeft);
         mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
         
-        if(mp_video_input->get_current_frame_number() > m_initialFrame)
+//         if(mp_video_input->get_current_frame_number() > m_initialFrame - 10)
+        if (!m_firstIteration)
             mp_stixel_motion_estimator->compute();
+        else
+            m_firstIteration = false;
     }
     
     if (mp_stixel_oflow_motion_estimator) {
@@ -279,10 +311,12 @@ bool StixelsApplicationROS::iterate()
 //             mp_stixels_tests[i]->compute();
 //     }
     
-//     mp_stixel_motion_evaluator->evaluatePerFrame(mp_video_input->get_current_frame_number() - 1);
-//     mp_stixel_motion_evaluator->evaluatePerFrameWithObstacles(mp_video_input->get_current_frame_number() - 1);
-    mp_stixel_motion_evaluator->evaluateDisparity(left_view, right_view,
-                                                  mp_video_input->get_current_frame_number() - 1);
+    if (! m_useObjects)
+        mp_stixel_motion_evaluator->evaluatePerFrame(mp_video_input->get_current_frame_number() - 1);
+    else
+        mp_stixel_motion_evaluator->evaluatePerFrameWithObstacles(mp_video_input->get_current_frame_number() - 1);
+//     mp_stixel_motion_evaluator->evaluateDisparity(left_view, right_view,
+//                                                   mp_video_input->get_current_frame_number() - 1);
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     

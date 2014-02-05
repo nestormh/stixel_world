@@ -1,19 +1,18 @@
 /*
-    Copyright 2013 Néstor Morales Hernández <email>
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
-*/
-
+ *  Copyright 2013 Néstor Morales Hernández <nestor@isaatc.ull.es>
+ * 
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+//  */
 
 #include "motionevaluation.h"
 #include "helpers/get_option_value.hpp"
@@ -445,9 +444,12 @@ bool MotionEvaluation::doOverlap(const t_annotation& d, const t_annotation& gt)
 
 bool MotionEvaluation::intersectionOverUnionCriterion(const t_annotation& detection, const t_annotation& gt, const float& p)
 {
-    const float & intersectionArea = overlappingArea(detection, gt);
+//     const float & intersectionArea = overlappingArea(detection, gt);
 //     const float unionArea = area(detection) + area(gt) - intersectionArea;
-    const float unionArea = area(gt);
+//     const float unionArea = area(gt);
+    
+    const float & intersectionArea = fabs(max(detection.ul.x, gt.ul.x) - min(detection.br.x, gt.br.x));
+    const float unionArea = fabs(min(detection.ul.x, gt.ul.x) - max(detection.br.x, gt.br.x));;
     
     const float intersectionOverUnion = intersectionArea / unionArea;
 

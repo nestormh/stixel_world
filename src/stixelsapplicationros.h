@@ -98,6 +98,13 @@ private:
     ros::Publisher m_pointCloudPub;
     tf::TransformBroadcaster m_map2odomTfBroadcaster;
     double m_accTime;
+    
+    bool m_firstIteration;
+    
+    // ROS parameters
+    bool m_useGraph, m_useCostMatrix, m_useObjects;
+    double m_SADFactor, m_heightFactor, m_polarDistFactor, m_polarSADFactor, m_histBatFactor;
+    
 // protected:
 //     void waitForKey(&m_waitTime arg1);
 };

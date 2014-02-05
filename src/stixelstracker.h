@@ -40,7 +40,7 @@ public:
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
                                  const float & polar_dist_factor, const float & polar_sad_factor,
                                  const float & dense_tracking_factor, const float & hist_similarity_factor, 
-                                 const bool & useGraphs);
+                                 const bool & useGraphs, const bool & useCostMatrix, const bool & useObjects);
     
     void updateDenseTracker(const cv::Mat & frame);
     
@@ -68,6 +68,7 @@ public:
         stixels3d_t stixels;
         t_roi3d roi3d;
         int32_t disparity;
+        double ncc;
     } t_obstacle;
     
     typedef vector < deque < t_obstacle> > t_obstaclesTracker;
@@ -139,7 +140,7 @@ protected:
     float m_dense_tracking_factor; // Dense tracking
     float m_hist_similarity_factor; // Histogram similarity
     
-    bool m_useGraphs;
+    bool m_useGraphs, m_useCostMatrix, m_useObjects;
     
     float m_minPolarSADForBeingStatic;
     
@@ -161,6 +162,7 @@ protected:
     double m_minDistBetweenClusters;
     
     cv::Mat m_currImg;
+    
 };
 }
 

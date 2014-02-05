@@ -32,6 +32,7 @@ set (DOPPIA_CPP_FILES
   ${DOPPIA_BASE_PATH}/src/helpers/data/DataSequenceHeader.pb.cc
   ${DOPPIA_BASE_PATH}/src/stereo_matching/ground_plane/plane3d.pb.cc
   ${DOPPIA_BASE_PATH}/src/stereo_matching/stixels/ground_top_and_bottom.pb.cc
+  ${DOPPIA_BASE_PATH}/src/stereo_matching/stixels/ground_top_and_bottom.pb.cc
 
 )
 

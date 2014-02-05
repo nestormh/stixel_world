@@ -21,7 +21,8 @@ add_executable(stixels_world_node
 #     ${CUDALK_SRC_CU}
     ${STIXEL_WORLD_SRC}
     ${LIBELAS_SRC_FILES}
-    doppia/extendedvideoinput.cpp 
+    doppia/extendedvideoinputfactory.cpp 
+    doppia/extendedvideofromfiles.cpp 
     kalmanfilter.cpp 
     oflowtracker.cpp
     stixelsapplicationros.cpp

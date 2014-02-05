@@ -84,7 +84,7 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
 void StixelsTracker::set_motion_cost_factors(const float& sad_factor, const float& height_factor, 
                                              const float& polar_dist_factor, const float & polar_sad_factor,
                                              const float& dense_tracking_factor, const float & hist_similarity_factor, 
-                                             const bool & useGraphs)
+                                             const bool & useGraphs, const bool & useCostMatrix, const bool & useObjects)
 {
     if ((sad_factor + height_factor + polar_dist_factor + polar_sad_factor + dense_tracking_factor + hist_similarity_factor) == 1.0) {
         m_sad_factor = sad_factor;
@@ -93,6 +93,8 @@ void StixelsTracker::set_motion_cost_factors(const float& sad_factor, const floa
         m_polar_sad_factor = polar_sad_factor;
         m_dense_tracking_factor = dense_tracking_factor;
         m_hist_similarity_factor = hist_similarity_factor;
+        m_useCostMatrix = useCostMatrix;
+        m_useObjects = useObjects;
         if (m_dense_tracking_factor != 0)
             mp_denseTracker.reset(new dense_tracker::DenseTracker());
     } else {
@@ -197,32 +199,47 @@ void StixelsTracker::compute()
 // //     getClusters();
     ///////////////////////////////////////
 double startWallTime = omp_get_wtime();
-#if 1    // New tracking style
-    
-    compute_motion_cost_matrix();
-    if (m_useGraphs) {
-        computeMotionWithGraphs();
-//         computeMotionWithGraphsAndHistogram();
-    } else {
-        compute_motion();
-    }
-    //     update_stixel_tracks_image();
-    trackObstacles();
-    
-//     updateTracker();
-#else // Old tracking style
+    if (m_useCostMatrix) {
         compute_motion_cost_matrix();
+    }
     if (m_useGraphs) {
         computeMotionWithGraphs();
-//         computeMotionWithGraphsAndHistogram();
     } else {
         compute_motion();
     }
-    update_stixel_tracks_image();
-//     trackObstacles();
+    if (m_useObjects) {
+        trackObstacles();
+    } else {
+        update_stixel_tracks_image();
+        updateTracker();
+    }
 
-    updateTracker();
-#endif
+// #if 0    // New tracking style
+//     
+//     compute_motion_cost_matrix();
+//     if (m_useGraphs) {
+//         computeMotionWithGraphs();
+// //         computeMotionWithGraphsAndHistogram();
+//     } else {
+//         compute_motion();
+//     }
+//     //     update_stixel_tracks_image();
+//     trackObstacles();
+//     
+// //     updateTracker();
+// #else // Old tracking style
+//         compute_motion_cost_matrix();
+// //     if (m_useGraphs) {
+// //         computeMotionWithGraphs();
+// //         computeMotionWithGraphsAndHistogram();
+// //     } else {
+//         compute_motion();
+// //     }
+//     update_stixel_tracks_image();
+// //     trackObstacles();
+// 
+//     updateTracker();
+// #endif
 ROS_ERROR("[TIMES] Time %f", omp_get_wtime() - startWallTime);
     
     return;
@@ -963,6 +980,7 @@ void StixelsTracker::computeMotionWithGraphsAndHistogram()
         gil2opencv(previous_image_view, lastImg);
     gil2opencv(current_image_view, m_currImg);
     BOOST_FOREACH (const Stixel & currStixel, *current_stixels_p) {
+        
         const uint32_t & maxMotionForStixel = compute_maximum_pixelwise_motion_for_stixel( currStixel );
         
         computeHistogram(hist1, m_currImg, currStixel);
@@ -973,10 +991,10 @@ void StixelsTracker::computeMotionWithGraphsAndHistogram()
             const Stixel & prevStixel = previous_stixels_p->at(stixelIdx);
         
             computeHistogram(hist2, lastImg, prevStixel);
-        
-//             cout << "Comparing " << prevStixel.x << " and " << currStixel.x << endl;
-        const int32_t pixelwise_motion = prevStixel.x - currStixel.x;
-        const int32_t pixelwise_motionY = fabs(prevStixel.bottom_y - currStixel.bottom_y);
+            
+    //             cout << "Comparing " << prevStixel.x << " and " << currStixel.x << endl;
+            const int32_t pixelwise_motion = prevStixel.x - currStixel.x;
+            const int32_t pixelwise_motionY = fabs(prevStixel.bottom_y - currStixel.bottom_y);
         
             if( pixelwise_motion >= -( int( maxMotionForStixel ) ) &&
                 pixelwise_motion <= int( maxMotionForStixel ) &&
@@ -1054,6 +1072,7 @@ void StixelsTracker::computeMotionWithGraphs()
     const float maxCost = motion_cost_matrix.maxCoeff();
     for (uint32_t prevIdx = 0; prevIdx < previous_stixels_p->size(); prevIdx++) {
         const Stixel & prevStixel = previous_stixels_p->at(prevIdx);
+                
         for (uint32_t currIdx = 0; currIdx < current_stixels_p->size(); currIdx++) {
             const Stixel & currStixel = current_stixels_p->at(currIdx);
             
@@ -1071,12 +1090,12 @@ void StixelsTracker::computeMotionWithGraphs()
                     
                 const float & polarDist = m_stixelsPolarDistMatrix(rowIndex, currIdx);
                 
-                if (polarDist > 1.0f) {
+//                 if (polarDist > 1.0f) {
                     const float & cost = maxCost - motion_cost_matrix(rowIndex, currIdx);
                     
                     const lemon::SmartGraph::Edge & e = graph.addEdge(graph.nodeFromId(prevIdx), graph.nodeFromId(currIdx + previous_stixels_p->size()));
                     costs[e] = cost;
-                }
+//                 }
             }
         }
     }
@@ -1476,6 +1495,27 @@ void StixelsTracker::computeObstacles() {
     m_prevObstacleCorresp.swap(m_currObstacleCorresp);
     m_currObstacleCorresp = vector<int>(current_stixels_p->size(), -1);
     
+    cv::Mat diffPolarMappedGray, polarPrevGray, polarCurrGray;
+    if (mp_polarCalibration) {
+        cv::Mat polarOutput;
+        cv::Mat polar1, polar2, polarPrev, polarCurr, diffPolar, diffPolarMapped;
+        mp_polarCalibration->getStoredRectifiedImages(polar1, polar2);
+        cv::Mat inverseX, inverseY;
+        mp_polarCalibration->getInverseMaps(inverseX, inverseY, 1);
+        cv::remap(polar1, polarPrev, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
+        cv::remap(polar2, polarCurr, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
+        
+//         cv::subtract(polar1, polar2, diffPolar);
+//         cv::remap(diffPolar, diffPolarMapped, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
+        
+//         cv::cvtColor(diffPolarMapped, diffPolarMappedGray, CV_BGR2GRAY);
+        cv::cvtColor(polarPrev, polarPrevGray, CV_BGR2GRAY);
+        cv::cvtColor(polarCurr, polarCurrGray, CV_BGR2GRAY);
+        
+        polarPrevGray.convertTo(polarPrevGray, CV_64F);
+        polarCurrGray.convertTo(polarCurrGray, CV_64F);
+    }
+    
     m_obstacles.clear();
     int & stixelIdxL = discontCurr[0];
     Stixel stixelL = current_stixels_p->at(stixelIdxL);
@@ -1498,8 +1538,7 @@ void StixelsTracker::computeObstacles() {
             currObstacle.roi3d.mean = cv::Point3d(0, 0, 0);
             currObstacle.roi3d.min = cv::Point3d(numeric_limits<double>::max(), 0.0, numeric_limits<double>::max());
             currObstacle.roi3d.max = cv::Point3d(numeric_limits<double>::min(), numeric_limits<double>::min(), numeric_limits<double>::min());
-            vector<uint32_t> disparities(64, 0);
-//             currObstacle.roi3d.mean.z = 0;
+            vector<int> disparities(128, 0);
             for (uint32_t j = stixel3dL.getBottom2d<cv::Point2d>().x; j < stixel3dR.getBottom2d<cv::Point2d>().x; j++) {
                 const Stixel stixel = current_stixels_p->at(j);
                 Stixel3d stixel3d(stixel);
@@ -1517,10 +1556,9 @@ void StixelsTracker::computeObstacles() {
                 currObstacle.roi3d.max.x = max(currObstacle.roi3d.max.x, stixel3d.bottom3d.x);
                 currObstacle.roi3d.max.y = max(currObstacle.roi3d.max.y, stixel3d.bottom3d.y);
                 currObstacle.roi3d.max.z = max(currObstacle.roi3d.max.z, stixel3d.bottom3d.z);
-                
-                disparities[stixel.disparity]++;
+                if (stixel.disparity < disparities.size())
+                    disparities[stixel.disparity]++;
             }
-            
             currObstacle.roi.width = stixelR.x - stixelL.x;
             currObstacle.roi.height -= currObstacle.roi.y - 1;
             currObstacle.roi3d.mean.x /= currObstacle.stixels.size();
@@ -1530,25 +1568,49 @@ void StixelsTracker::computeObstacles() {
             currObstacle.roi3d.width = currObstacle.roi3d.max.x - currObstacle.roi3d.min.x;
             currObstacle.roi3d.height = currObstacle.roi3d.max.y;
             currObstacle.roi3d.length = currObstacle.roi3d.max.z - currObstacle.roi3d.min.z;
-            
             int maxValue = 0;
             currObstacle.disparity = 0;
-            for (uint32_t j = 0; j < disparities.size(); j++) {
-                if (disparities[j] > maxValue) {
-                    maxValue = disparities[j];
-                    currObstacle.disparity = j;
-                }
-            }
+//             for (uint32_t j = 0; j < disparities.size(); j++) {
+//                 if (disparities[j] > maxValue) {
+//                     maxValue = disparities[j];
+//                     currObstacle.disparity = j;
+//                 }
+//             }
             
             currObstacle.disparity = *max_element(disparities.begin(),disparities.end());
+            
             // TODO: Parameterize
             // TODO: Use 3d width and height to filter
             if ((currObstacle.roi.width > 10) &&
                 (currObstacle.roi.height > 40)) {
-                BOOST_FOREACH(const Stixel3d & stixel, currObstacle.stixels) {
-                    m_currObstacleCorresp[stixel.getBottom2d<cv::Point2i>().x] = m_obstacles.size();
-                }
-                m_obstacles.push_back(currObstacle);                
+                
+                // Get the polar SAD for the obstacle
+                cv::Mat roiPrev = polarPrevGray(currObstacle.roi);
+                cv::Mat roiCurr = polarCurrGray(currObstacle.roi);
+            
+                cv::Scalar meanCurr, meanPrev;
+                cv::Scalar stddevCurr, stddevPrev;
+            
+                cv::meanStdDev (roiPrev, meanPrev, stddevPrev);
+                cv::meanStdDev (roiCurr, meanCurr, stddevCurr);
+                
+                cv::Mat elemPrev = roiPrev - meanPrev;
+                cv::Mat elemCurr = roiCurr - meanCurr;
+                
+                cv::Mat multiplication;
+                
+                cv::multiply(elemPrev, elemCurr, multiplication);
+                cv::divide(multiplication, stddevPrev * stddevCurr, multiplication);
+
+                currObstacle.ncc = cv::mean(multiplication)[0];
+                //                 currObstacle.sad = cv::mean(roiPolar)[0];
+                cout << "currObstacle.ncc " << currObstacle.ncc << endl;
+//                 if (currObstacle.ncc < 0.95) {
+                    BOOST_FOREACH(const Stixel3d & stixel, currObstacle.stixels) {
+                        m_currObstacleCorresp[stixel.getBottom2d<cv::Point2i>().x] = m_obstacles.size();
+                    }
+                    m_obstacles.push_back(currObstacle); 
+//                 }
             }
             
             stixelL = stixelR;
@@ -1564,7 +1626,7 @@ void StixelsTracker::trackObstacles()
     vector < t_obstacle> prevObstacles;
     
     m_obstacles.swap(prevObstacles);
-    
+
     computeObstacles();
     
     if (prevObstacles.size() == 0) {
@@ -1602,6 +1664,7 @@ void StixelsTracker::trackObstacles()
             }
         }
     }
+    
 //     cout << "   ";
 //     for (uint32_t j = 0; j < m_obstacles.size(); j++) {
 //         cout << j << "   ";
@@ -1623,8 +1686,6 @@ void StixelsTracker::trackObstacles()
             costs[e] = correspondences.at<int>(i, j);
         }
     }
-    
-    
     
     lemon::MaxWeightedMatching< lemon::SmartGraph, lemon::SmartGraph::EdgeMap <int> > graphMatcher(graph, costs);
     
@@ -1653,7 +1714,7 @@ void StixelsTracker::trackObstacles()
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // VISUALIZATION
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    return;
+//     return;
     cv::Mat img = cv::Mat::zeros(m_currImg.rows * 2, m_currImg.cols * 2, CV_8UC3);
     cv::Rect roi(0, 0, m_currImg.cols, m_currImg.rows);
     cv::Mat roiImgPrev = img(roi);
@@ -1676,7 +1737,8 @@ void StixelsTracker::trackObstacles()
         cv::rectangle(roiImgCurr, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
                       cv::Point2i(m_obstacles[i].roi.x + 20, m_obstacles[i].roi.y - 10), cv::Scalar::all(255), -1);
         stringstream oss;
-        oss << i;
+//         oss << i;
+        oss << m_obstacles[i].ncc;
         cv::putText(roiImgCurr, oss.str(), cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
 
         BOOST_FOREACH(const Stixel3d & currStixel, m_obstacles[i].stixels) {
