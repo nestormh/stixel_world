@@ -61,6 +61,8 @@ public:
             cv::Point3d max;
             cv::Point3d mean;
             
+            cv::Point3d centroid;
+            
             double width, length, height;
         } t_roi3d;
         
@@ -117,6 +119,11 @@ protected:
     float compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2);
     void trackObstacles();
     void computeObstacles();
+    
+    double getNcc(const cv::Mat & img1, const cv::Mat & img2, const cv::Rect & rect1, const cv::Rect & rect2);
+//     void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);
+    float compareHistograms(const cv::Mat & img1, const cv::Mat & img2, const cv::Rect & rect1, const cv::Rect & rect2);
+    
     
     motion_cost_matrix_t m_stixelsPolarDistMatrix;
     motion_cost_matrix_t m_polarSADMatrix;
