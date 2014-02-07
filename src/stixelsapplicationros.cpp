@@ -75,6 +75,9 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     nh.param("polarSADFactor", m_polarSADFactor, 0.0);
     nh.param("histBatFactor", m_histBatFactor, 0.0);
     
+    // TODO: Parameterize
+    m_frameBufferLength = 2;
+    
     cout << "m_useGraph " << m_useGraph << endl;
     cout << "m_useCostMatrix " << m_useCostMatrix << endl;
     cout << "m_useObjects " << m_useObjects << endl;
@@ -225,7 +228,6 @@ void StixelsApplicationROS::runStixelsApplication()
     double startWallTime = omp_get_wtime();
     while (iterate()) {
 //         visualize();
-        waitForKey(&m_waitTime);
 //         publishStixels();
         update();
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
@@ -245,6 +247,20 @@ void StixelsApplicationROS::update()
     
     boost::gil::copy_pixels(currLeft, boost::gil::view(m_prevLeftRectified));
     boost::gil::copy_pixels(currRight, boost::gil::view(m_prevRightRectified));
+    
+//     doppia::AbstractVideoInput::input_image_t bufferImgL, bufferImgR;
+    doppia::AbstractVideoInput::input_image_t bufferImgL = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
+    doppia::AbstractVideoInput::input_image_t bufferImgR = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
+    boost::gil::copy_pixels(currLeft, boost::gil::view(bufferImgL));
+    boost::gil::copy_pixels(currRight, boost::gil::view(bufferImgR));
+    
+    m_frameBufferLeft.push_back(bufferImgL);
+    m_frameBufferRight.push_back(bufferImgR);
+    
+    if (m_frameBufferLeft.size() > m_frameBufferLength)
+        m_frameBufferLeft.pop_front();
+    if (m_frameBufferRight.size() > m_frameBufferLength)
+        m_frameBufferRight.pop_front();
     
     // TODO: Use again when speed information is needed
     if (mp_stixel_motion_estimator)
@@ -268,6 +284,9 @@ bool StixelsApplicationROS::iterate()
     
     if ((mp_video_input->get_current_frame_number() == mp_video_input->get_number_of_frames()) || (! mp_video_input->next_frame()))
         return false;
+    
+//     if (m_frameBufferLeft.size() < m_frameBufferLength)
+//         return true;
     
     cout << "Frame " << mp_video_input->get_current_frame_number() << endl;
     
@@ -330,13 +349,17 @@ bool StixelsApplicationROS::rectifyPolar()
     if (! m_doPolarCalib)
         return true;
     
-    if (mp_video_input->get_current_frame_number() < m_initialFrame + 2)
-        return true;
+    if (m_frameBufferLeft.size() < m_frameBufferLength)
+        return false;
     
     cv::Mat prevLeft, prevRight, currRight, FL, FR;
-    gil2opencv(boost::gil::view(m_prevLeftRectified), prevLeft);
-    gil2opencv(boost::gil::view(m_prevRightRectified), prevRight);
-//     gil2opencv(mp_video_input->get_left_image(), m_currLeft);
+//     gil2opencv(boost::gil::view(m_prevLeftRectified), prevLeft);
+//     gil2opencv(boost::gil::view(m_prevRightRectified), prevRight);
+    
+    gil2opencv(boost::gil::view(m_frameBufferLeft[0]), prevLeft);
+    gil2opencv(boost::gil::view(m_frameBufferRight[0]), prevRight);
+
+    //     gil2opencv(mp_video_input->get_left_image(), m_currLeft);
     gil2opencv(mp_video_input->get_right_image(), currRight);
     vector < vector < cv::Point2f > > correspondences;
     
@@ -391,25 +414,25 @@ bool StixelsApplicationROS::rectifyPolar()
 //     // NOTE: end of note
     
     // TODO: Remove, this is just for visualization
-    cv::Mat Lt0, Rt0, Lt1, Rt1;
-    
-    mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Lt0, Lt1);
-    mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Rt0, Rt1);
-    
-    m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
-    m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
-    m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
-    m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
-    
-    boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
-    boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
-    boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
-    boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
-    
-    opencv2gil(Lt0, viewLt0);
-    opencv2gil(Rt0, viewRt0);
-    opencv2gil(Lt1, viewLt1);
-    opencv2gil(Rt1, viewRt1);
+//     cv::Mat Lt0, Rt0, Lt1, Rt1;
+//     
+//     mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Lt0, Lt1);
+//     mp_polarCalibration->getRectifiedImages(prevLeft, m_currLeft, Rt0, Rt1);
+//     
+//     m_polarLt0 = doppia::AbstractVideoInput::input_image_t(Lt0.cols, Lt0.rows);
+//     m_polarRt0 = doppia::AbstractVideoInput::input_image_t(Rt0.cols, Rt0.rows);
+//     m_polarLt1 = doppia::AbstractVideoInput::input_image_t(Lt1.cols, Lt1.rows);
+//     m_polarRt1 = doppia::AbstractVideoInput::input_image_t(Rt1.cols, Rt1.rows);
+//     
+//     boost::gil::rgb8_view_t viewLt0 = boost::gil::view(m_polarLt0);
+//     boost::gil::rgb8_view_t viewRt0 = boost::gil::view(m_polarRt0);
+//     boost::gil::rgb8_view_t viewLt1 = boost::gil::view(m_polarLt1);
+//     boost::gil::rgb8_view_t viewRt1 = boost::gil::view(m_polarRt1);
+//     
+//     opencv2gil(Lt0, viewLt0);
+//     opencv2gil(Rt0, viewRt0);
+//     opencv2gil(Lt1, viewLt1);
+//     opencv2gil(Rt1, viewRt1);
         
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     

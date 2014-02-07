@@ -77,6 +77,8 @@ private:
     doppia::AbstractVideoInput::input_image_t m_prevLeftRectified, m_prevRightRectified;
     doppia::AbstractVideoInput::input_image_t m_polarLt0, m_polarRt0, m_polarLt1, m_polarRt1;
     
+    deque <doppia::AbstractVideoInput::input_image_t> m_frameBufferLeft, m_frameBufferRight;
+    
     boost::shared_ptr<stixels_t> mp_prevStixels;
     
     stixels_t m_transfStixelsLt0, m_transfStixelsLt1;
@@ -104,6 +106,8 @@ private:
     // ROS parameters
     bool m_useGraph, m_useCostMatrix, m_useObjects;
     double m_SADFactor, m_heightFactor, m_polarDistFactor, m_polarSADFactor, m_histBatFactor;
+    
+    uint32_t m_frameBufferLength;
     
 // protected:
 //     void waitForKey(&m_waitTime arg1);

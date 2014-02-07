@@ -2062,4 +2062,6 @@ void StixelsTracker::trackObstacles()
     }
 
     cv::imshow("StixelsEvol", img);
+    uint32_t time;
+    waitForKey(&time);
 }
