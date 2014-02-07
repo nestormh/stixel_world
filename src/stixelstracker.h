@@ -72,6 +72,7 @@ public:
         t_roi3d roi3d;
         int32_t disparity;
         double ncc;
+        bool valid;
     } t_obstacle;
     
     typedef vector < deque < t_obstacle> > t_obstaclesTracker;
@@ -120,6 +121,9 @@ protected:
     float compareHistogram(const cv::Mat& hist1, const cv::Mat& hist2, const Stixel& stixel1, const Stixel& stixel2);
     void trackObstacles();
     void computeObstacles();
+    void aggregateObstacles();
+    void filterObstacles();
+    void getObstacleFromStixelsList(const stixels_t& stixels, const uint32_t& idx1, const uint32_t& idx2, stixel_world::StixelsTracker::t_obstacle& bstacl);
     
     double getNcc(const cv::Mat & img1, const cv::Mat & img2, const cv::Rect & rect1, const cv::Rect & rect2);
 //     void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);

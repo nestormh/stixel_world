@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 #   message_generation
 )
 
-set(ROS_BUILD_TYPE Release)
+set(ROS_BUILD_TYPE Debug)
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp -msse3")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -fopenmp -msse3")

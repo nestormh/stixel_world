@@ -1507,6 +1507,11 @@ float StixelsTracker::compareHistograms(const cv::Mat& img1, const cv::Mat& img2
 }
 
 void StixelsTracker::computeObstacles() {
+    // TODO: Parameterize
+    const int max2DWidthToAcceptObstacle = 10;
+    const int max2DHeightToAcceptObstacle = 40;
+    const double maxDepthDistInObstacle = 1.0;
+    
     vector <int> discontPrev, discontCurr;
     
     for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
@@ -1548,7 +1553,6 @@ void StixelsTracker::computeObstacles() {
     Stixel3d stixel3dL(stixelL);
     stixel3dL.update3dcoords(stereo_camera);
     t_obstacle currObstacle;
-    currObstacle.stixels.push_back(stixel3dL);
     for (uint32_t i = 0; i < discontCurr.size(); i++) {
         int & stixelIdxR = discontCurr[i];
         
@@ -1557,65 +1561,12 @@ void StixelsTracker::computeObstacles() {
         stixel3dR.update3dcoords(stereo_camera);
         
         
-        if (fabs(stixel3dR.bottom3d.z - stixel3dL.bottom3d.z) > 1.0) {
-            // TODO: Get values from stored stixels
-            currObstacle.roi.x = stixelL.x;
-            currObstacle.roi.y = stixelL.top_y;
-            currObstacle.roi.height = stixelL.bottom_y;
-            currObstacle.roi3d.mean = cv::Point3d(0, 0, 0);
-            currObstacle.roi3d.min = cv::Point3d(numeric_limits<double>::max(), 0.0, numeric_limits<double>::max());
-            currObstacle.roi3d.max = -cv::Point3d(numeric_limits<double>::max(), numeric_limits<double>::max(), numeric_limits<double>::max());
-            vector<int> disparities(128, 0);
-            vector <double> depths;
-            for (uint32_t j = stixel3dL.getBottom2d<cv::Point2d>().x; j < stixel3dR.getBottom2d<cv::Point2d>().x; j++) {
-                const Stixel stixel = current_stixels_p->at(j);
-                Stixel3d stixel3d(stixel);
-                stixel3d.update3dcoords(stereo_camera);
-                currObstacle.stixels.push_back(stixel3d);
-                
-                currObstacle.roi.y = min(stixel.top_y, currObstacle.roi.y);
-                currObstacle.roi.height = max(currObstacle.roi.height, stixel.bottom_y);
-                
-                currObstacle.roi3d.mean += stixel3d.bottom3d;
-                
-                currObstacle.roi3d.min.x = min(currObstacle.roi3d.min.x, stixel3d.bottom3d.x);
-                currObstacle.roi3d.min.z = min(currObstacle.roi3d.min.z, stixel3d.bottom3d.z);
-
-                currObstacle.roi3d.max.x = max(currObstacle.roi3d.max.x, stixel3d.bottom3d.x);
-                currObstacle.roi3d.max.y = max(currObstacle.roi3d.max.y, (stixel3d.bottom3d.y - stixel3d.top3d.y));
-                currObstacle.roi3d.max.z = max(currObstacle.roi3d.max.z, stixel3d.bottom3d.z);
-                
-                if (stixel.disparity < disparities.size())
-                    disparities[stixel.disparity]++;
-                
-                depths.push_back(stixel3d.bottom3d.z);
-            }
-            currObstacle.roi.width = stixelR.x - stixelL.x;
-            currObstacle.roi.height -= currObstacle.roi.y - 1;
-            currObstacle.roi3d.mean.x /= currObstacle.stixels.size();
-            currObstacle.roi3d.mean.y = 0.0;
-            currObstacle.roi3d.mean.z /= currObstacle.stixels.size();
+        if (fabs(stixel3dR.bottom3d.z - stixel3dL.bottom3d.z) > maxDepthDistInObstacle) {
+            getObstacleFromStixelsList(*current_stixels_p, stixelL.x, stixelR.x, currObstacle);
             
-            currObstacle.roi3d.width = currObstacle.roi3d.max.x - currObstacle.roi3d.min.x;
-            currObstacle.roi3d.height = currObstacle.roi3d.max.y;
-            currObstacle.roi3d.length = currObstacle.roi3d.max.z - currObstacle.roi3d.min.z;
-
-            currObstacle.roi3d.centroid.x = (currObstacle.roi3d.max.x + currObstacle.roi3d.min.x) / 2.0;
-            currObstacle.roi3d.centroid.y = 0.0;
-            currObstacle.roi3d.centroid.z = (currObstacle.roi3d.max.z + currObstacle.roi3d.min.z) / 2.0;
-            
-            currObstacle.roi3d.stdDev = 0.0;
-            BOOST_FOREACH(const double & depth, depths) {
-                currObstacle.roi3d.stdDev += (depth - currObstacle.roi3d.mean.z) * (depth - currObstacle.roi3d.mean.z);
-            }
-            currObstacle.roi3d.stdDev = sqrt(currObstacle.roi3d.stdDev / depths.size());
-            
-            currObstacle.disparity = *max_element(disparities.begin(),disparities.end());
-            
-            // TODO: Parameterize
             // TODO: Use 3d width and height to filter
-            if ((currObstacle.roi.width > 10) &&
-                (currObstacle.roi.height > 40)) {
+            if ((currObstacle.roi.width > max2DWidthToAcceptObstacle) &&
+                (currObstacle.roi.height > max2DHeightToAcceptObstacle)) {
                 
                 BOOST_FOREACH(const Stixel3d & stixel, currObstacle.stixels) {
                     m_currObstacleCorresp[stixel.getBottom2d<cv::Point2i>().x] = m_obstacles.size();
@@ -1627,6 +1578,176 @@ void StixelsTracker::computeObstacles() {
             stixel3dL = stixel3dR;
             currObstacle.stixels.clear();
             currObstacle.stixels.push_back(stixel3dL);
+        }
+    }
+
+}
+
+void StixelsTracker::getObstacleFromStixelsList(const stixels_t & stixels, const uint32_t & idx1, const uint32_t & idx2, 
+                                                t_obstacle & obstacle) {
+
+    obstacle.roi.x = stixels[idx1].x;
+    obstacle.roi.y = stixels[idx1].top_y;
+    obstacle.roi.height = stixels[idx1].bottom_y;
+    obstacle.roi3d.mean = cv::Point3d(0, 0, 0);
+    obstacle.roi3d.min = cv::Point3d(numeric_limits<double>::max(), 0.0, numeric_limits<double>::max());
+    obstacle.roi3d.max = -cv::Point3d(numeric_limits<double>::max(), numeric_limits<double>::max(), numeric_limits<double>::max());
+    vector<int> disparities(128, 0);
+    vector <double> depths;
+    for (uint32_t j = idx1; j < idx2; j++) {
+        const Stixel stixel = stixels[j];
+        Stixel3d stixel3d(stixel);
+        stixel3d.update3dcoords(stereo_camera);
+        obstacle.stixels.push_back(stixel3d);
+        
+        obstacle.roi.y = min(stixel.top_y, obstacle.roi.y);
+        obstacle.roi.height = max(obstacle.roi.height, stixel.bottom_y);
+        
+        obstacle.roi3d.mean += stixel3d.bottom3d;
+        
+        obstacle.roi3d.min.x = min(obstacle.roi3d.min.x, stixel3d.bottom3d.x);
+        obstacle.roi3d.min.z = min(obstacle.roi3d.min.z, stixel3d.bottom3d.z);
+        
+        obstacle.roi3d.max.x = max(obstacle.roi3d.max.x, stixel3d.bottom3d.x);
+        obstacle.roi3d.max.y = max(obstacle.roi3d.max.y, (stixel3d.bottom3d.y - stixel3d.top3d.y));
+        obstacle.roi3d.max.z = max(obstacle.roi3d.max.z, stixel3d.bottom3d.z);
+        
+        if (stixel.disparity < disparities.size())
+            disparities[stixel.disparity]++;
+        
+        depths.push_back(stixel3d.bottom3d.z);
+    }
+    obstacle.roi.width = idx2 - idx1;
+    obstacle.roi.height -= obstacle.roi.y - 1;
+    obstacle.roi3d.mean.x /= obstacle.stixels.size();
+    obstacle.roi3d.mean.y = 0.0;
+    obstacle.roi3d.mean.z /= obstacle.stixels.size();
+    
+    obstacle.roi3d.width = obstacle.roi3d.max.x - obstacle.roi3d.min.x;
+    obstacle.roi3d.height = obstacle.roi3d.max.y;
+    obstacle.roi3d.length = obstacle.roi3d.max.z - obstacle.roi3d.min.z;
+    
+    obstacle.roi3d.centroid.x = (obstacle.roi3d.max.x + obstacle.roi3d.min.x) / 2.0;
+    obstacle.roi3d.centroid.y = 0.0;
+    obstacle.roi3d.centroid.z = (obstacle.roi3d.max.z + obstacle.roi3d.min.z) / 2.0;
+    
+    obstacle.roi3d.stdDev = 0.0;
+    BOOST_FOREACH(const double & depth, depths) {
+        obstacle.roi3d.stdDev += (depth - obstacle.roi3d.mean.z) * (depth - obstacle.roi3d.mean.z);
+    }
+    obstacle.roi3d.stdDev = sqrt(obstacle.roi3d.stdDev / depths.size());
+    
+    obstacle.disparity = *max_element(disparities.begin(),disparities.end());
+    obstacle.valid = true;
+}
+
+void StixelsTracker::aggregateObstacles()
+{
+    // TODO: Parameterize
+    const double minWidth = 0.5;
+    const double minHeight = 1.5;
+    const double maxDepthDistToAggregate = 0.2;
+    const double maxLateralDistToAggregate = 0.20;
+    
+    vector <t_obstacle> tmpObstacles;
+    tmpObstacles.reserve(m_obstacles.size());
+    cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+    
+    t_obstacle currObstacle;
+    for (uint32_t i = 0; i < m_obstacles.size(); i++) {
+        if ((currObstacle.stixels.size() != 0) &&
+            ((fabs(m_obstacles[i].roi3d.min.z - m_obstacles[i - 1].roi3d.min.z) > maxDepthDistToAggregate) ||
+            ((m_obstacles[i].roi3d.min.x - m_obstacles[i - 1].roi3d.max.x) > maxLateralDistToAggregate))) {
+            
+            // TODO: Add current obstacle to the list
+//             if (((m_obstacles[i].roi3d.width) > minWidth) &&
+//                 ((m_obstacles[i].roi3d.height) > minHeight)) {
+                tmpObstacles.push_back(currObstacle);
+//             }
+        
+            currObstacle = m_obstacles[i];
+            
+        } else {
+                if (currObstacle.stixels.size() == 0) {
+                    currObstacle = m_obstacles[i];
+                } else {
+                    getObstacleFromStixelsList(*current_stixels_p, currObstacle.roi.x, 
+                                               m_obstacles[i].roi.x + m_obstacles[i].roi.width + 1, currObstacle);
+                }
+        }
+    }
+    
+    m_obstacles.swap(tmpObstacles);
+}
+
+
+void StixelsTracker::filterObstacles()
+{
+    // TODO: Parameterize
+    const double gridSize = 0.10;
+    const double occupancyThresh = 100;
+    
+    if (mp_polarCalibration) {
+        
+        // Initial images and mapping is obtained
+        cv::Mat polar1, polar2;
+        cv:: Mat diffPolar, diffPolarGray;
+        cv::Mat inverseX, inverseY;
+        mp_polarCalibration->getStoredRectifiedImages(polar1, polar2);
+        mp_polarCalibration->getInverseMaps(inverseX, inverseY, 1);
+        
+        // Mask generation
+        cv::Mat mask;
+        cv::Mat mask1(polar1.rows, polar1.cols, CV_8UC1);
+        cv::Mat mask2(polar2.rows, polar2.cols, CV_8UC1);
+        mask1.setTo(cv::Scalar(255));
+        mask2.setTo(cv::Scalar(255));
+        
+        cv::remap(mask1, mask1, inverseX, inverseY, cv::INTER_NEAREST, cv::BORDER_TRANSPARENT);
+        cv::remap(mask2, mask2, inverseX, inverseY, cv::INTER_NEAREST, cv::BORDER_TRANSPARENT);
+        
+        cv::bitwise_and(mask1, mask2, mask);
+        cv::threshold(mask, mask, 254, 255, cv::THRESH_BINARY);
+        
+        cv::Mat maskCopy;
+        cv::normalize(mask, maskCopy, 0, 1, CV_MINMAX, CV_8U);
+        cv::cvtColor(maskCopy, maskCopy, CV_GRAY2BGR);
+        
+        // Polar difference generation
+        cv::absdiff(polar1, polar2, diffPolar);
+        cv::remap(diffPolar, diffPolar, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);        
+        cv::multiply(diffPolar, maskCopy, diffPolar);
+        diffPolar.copyTo(diffPolar, mask);
+        
+        cv::cvtColor(diffPolar, diffPolarGray, CV_BGR2GRAY);
+        
+        cv::threshold(diffPolarGray, diffPolarGray, 20, 255, cv::THRESH_BINARY);
+        
+        cv::cvtColor(diffPolarGray, diffPolar, CV_GRAY2BGR);
+        
+        cv::dilate(diffPolarGray, diffPolarGray, cv::Mat(), cv::Point(-1,-1));
+        
+        // Obstacles are evaluated
+        BOOST_FOREACH(t_obstacle & currObstacle, m_obstacles) {
+            
+            cv::Mat obstacleROI = diffPolarGray(currObstacle.roi);
+            
+            cv::Mat occupancyMap = cv::Mat::zeros(ceil(currObstacle.roi3d.height / gridSize), ceil(currObstacle.roi3d.width / gridSize), CV_8UC1);
+            
+            double factorX = (double)occupancyMap.cols / obstacleROI.cols;
+            double factorY = (double)occupancyMap.rows / obstacleROI.rows;
+            for (uint32_t y = obstacleROI.rows / 2.0; y < obstacleROI.rows; y++)  {
+                for (uint32_t x = 0; x < obstacleROI.cols; x++)  {
+                    if (obstacleROI.at<uchar>(y, x) != 0) {
+                        occupancyMap.at<uchar>(y * factorY, x * factorX) = 0xFF;
+                    }
+                }
+            }
+            
+            occupancyMap = occupancyMap(cv::Rect(0, occupancyMap.rows / 2.0, occupancyMap.cols, ceil(occupancyMap.rows / 2.0)));
+            
+            if (cv::mean(occupancyMap)[0] < occupancyThresh)
+                currObstacle.valid = false;
         }
     }
 }
@@ -1671,6 +1792,10 @@ void StixelsTracker::trackObstacles()
     m_obstacles.swap(prevObstacles);
 
     computeObstacles();
+    
+//     aggregateObstacles();
+    
+    filterObstacles();
     
     if (prevObstacles.size() == 0) {
         m_obstaclesTracker.resize(m_obstacles.size());
@@ -1875,169 +2000,91 @@ void StixelsTracker::trackObstacles()
     
     // Polar calibration visualization
     if (mp_polarCalibration) {
-        cv::Mat diffPolarGray, polarPrevGray, polarCurrGray;
-        cv::Mat polarOutput;
-        cv::Mat polar1, polar2, polarPrev, polarCurr, diffPolar, diffPolarMapped;
-        mp_polarCalibration->getStoredRectifiedImages(polar1, polar2);
-        cv::Mat inverseX, inverseY;
-        mp_polarCalibration->getInverseMaps(inverseX, inverseY, 1);
-        cv::remap(polar1, polarPrev, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
-        cv::remap(polar2, polarCurr, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
+        // TODO: Parameterize
+        const double gridSize = 0.10;
         
-        cv::absdiff(polar1, polar2, diffPolar);
+        // Initial images and mapping is obtained
+        cv::Mat polar1, polar2;
+        cv:: Mat diffPolar, diffPolarGray;
+        cv::Mat inverseX, inverseY;
+        mp_polarCalibration->getStoredRectifiedImages(polar1, polar2);
+        mp_polarCalibration->getInverseMaps(inverseX, inverseY, 1);
+        
+        // Mask generation
+        cv::Mat mask;
         cv::Mat mask1(polar1.rows, polar1.cols, CV_8UC1);
         cv::Mat mask2(polar2.rows, polar2.cols, CV_8UC1);
         mask1.setTo(cv::Scalar(255));
         mask2.setTo(cv::Scalar(255));
         
-        cv::remap(diffPolar, diffPolar, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
-        cv::remap(polar1, polar1, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
-        cv::remap(polar2, polar2, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
         cv::remap(mask1, mask1, inverseX, inverseY, cv::INTER_NEAREST, cv::BORDER_TRANSPARENT);
         cv::remap(mask2, mask2, inverseX, inverseY, cv::INTER_NEAREST, cv::BORDER_TRANSPARENT);
         
-        cv::Mat mask;
         cv::bitwise_and(mask1, mask2, mask);
-        
         cv::threshold(mask, mask, 254, 255, cv::THRESH_BINARY);
         
         cv::Mat maskCopy;
         cv::normalize(mask, maskCopy, 0, 1, CV_MINMAX, CV_8U);
         cv::cvtColor(maskCopy, maskCopy, CV_GRAY2BGR);
         
+        // Polar difference generation
+        cv::absdiff(polar1, polar2, diffPolar);
+        cv::remap(diffPolar, diffPolar, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);        
         cv::multiply(diffPolar, maskCopy, diffPolar);
-        cv::multiply(polar1, maskCopy, polar1);
-        cv::multiply(polar2, maskCopy, polar2);
         diffPolar.copyTo(diffPolar, mask);
         
         cv::cvtColor(diffPolar, diffPolarGray, CV_BGR2GRAY);
-        cv::cvtColor(polarPrev, polarPrevGray, CV_BGR2GRAY);
-        cv::cvtColor(polarCurr, polarCurrGray, CV_BGR2GRAY);
         
-        cv::threshold(diffPolarGray, diffPolarGray, 50, 255, cv::THRESH_BINARY);
+        cv::threshold(diffPolarGray, diffPolarGray, 20, 255, cv::THRESH_BINARY);
         
         cv::cvtColor(diffPolarGray, diffPolar, CV_GRAY2BGR);
         
-        diffPolar.copyTo(roiImgPolar);
-//         polar1.copyTo(roiImgPolar);
-//         m_currImg.copyTo(roiImgPolar);
-        
-        // TODO: Parameterize
-        const double gridSize = 0.10;
-        
-//         lastImg.copyTo(roiImgTrack);
-        for (uint32_t i = 0; i < m_obstacles.size(); i++) {
-            cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-            double ncc = getNcc(polar1, polar2, m_obstacles[i].roi, m_obstacles[i].roi);
-            double absdiff = cv::mean(diffPolarGray(m_obstacles[i].roi))[0];
-            double bat = compareHistograms(polar1, polar2, m_obstacles[i].roi, m_obstacles[i].roi);
-            
-            cv::Mat obstacle = diffPolarGray(m_obstacles[i].roi);
-            
-            cv::Mat occupancyMap = cv::Mat::zeros(ceil(m_obstacles[i].roi3d.height / gridSize), ceil(m_obstacles[i].roi3d.width / gridSize), CV_8UC1);
-            
-            double factorX = (double)occupancyMap.cols / obstacle.cols;
-            double factorY = (double)occupancyMap.rows / obstacle.rows;
-            for (uint32_t y = obstacle.rows / 2.0; y < obstacle.rows; y++)  {
-                for (uint32_t x = 0; x < obstacle.cols; x++)  {
-                    if (obstacle.at<uchar>(y, x) != 0) {
-                        occupancyMap.at<uchar>(y * factorY, x * factorX) = 0xFF;
-                    }
-                }
-            }
-            
-            occupancyMap = occupancyMap(cv::Rect(0, occupancyMap.rows / 2.0, occupancyMap.cols, ceil(occupancyMap.rows / 2.0)));
-            
-//             cout << i << ": " << cv::mean(occupancyMap)[0] << ", " << cv::sum(occupancyMap)[0] << endl;
-            
-//             if (cv::countNonZero(diffPolarGray(m_obstacles[i].roi)) > 10)
-            if (cv::mean(occupancyMap)[0] > 100)
-                cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
-                          cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-                          cv::Scalar(0, 255, 0), 2);
-            else
-                cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
-                              cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-                              cv::Scalar(0, 0, 255), 2);
-            
-//             cout << i << ": ncc " << ncc << ", absdiff " << absdiff << ", bat " << bat << endl;
-//                 transformPoints(const vector< cv::Point2d >& points1, 
-//                                 vector< cv::Point2d >& transformedPoints1, const uint8_t & whichImage);
-//                 vector< cv::Point2d > points(4);
-//                 points[0] = cv::Point2d(m_obstacles[i].roi.x, m_obstacles[i].roi.y);
-//                 points[1] = cv::Point2d(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y);
-//                 points[2] = cv::Point2d(m_obstacles[i].roi.x, m_obstacles[i].roi.y + m_obstacles[i].roi.height);
-//                 points[3] = cv::Point2d(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height);
-//                 
-//                 vector< cv::Point2d > transformedPoints;
-//                 vector< cv::Point2d > transformedPoints2;
-//             
-//                 mp_polarCalibration->transformPoints(points, transformedPoints, 1);
-//                 mp_polarCalibration->transformPoints(points, transformedPoints2, 2);
-// 
-//                 cv::rectangle(roiImgPolar, points[0], points[3], cv::Scalar(255, 0, 0), 1);
-//                 
-//                 cv::Point2d centroidCurr, centroidPrev;
-//                 double polarDist = 0.0;
-//                 for (uint32_t j = 0; j < 4; j++) {
-//                     centroidCurr += points[j];
-//                     centroidPrev += transformedPoints[j];
-//                     polarDist += fabs(transformedPoints[j].x - transformedPoints2[j].x);
-//                     cout << transformedPoints2[j] << " -- " << transformedPoints[j] << endl;
-//                 }
-//                 
-//                 polarDist /= 4.0;
-//                 
-//                 cv::rectangle(roiImgTrack, transformedPoints[0], transformedPoints[3], cv::Scalar(255, 0, 0), 1);
-//                 
-//                 centroidCurr.x /= 4.0;
-//                 centroidCurr.y /= 4.0;
-//                 centroidPrev.x /= 4.0;
-//                 centroidPrev.y /= 4.0;
-//                 
-//                 Eigen::Vector2f tmpCentroidCurr2d, tmpCentroidPrev2d;
-//                 tmpCentroidCurr2d << centroidCurr.x, centroidCurr.y;
-//                 tmpCentroidPrev2d << centroidPrev.x, centroidPrev.y;
-//                 
-//                 const float & depth = stereo_camera.disparity_to_depth(m_obstacles[i].disparity);
-//                 const Eigen::Vector3f & tmpCentroidCurr3d = stereo_camera.get_left_camera().back_project_2d_point_to_3d(tmpCentroidCurr2d, depth);
-//                 const Eigen::Vector3f & tmpCentroidPrev3d = stereo_camera.get_left_camera().back_project_2d_point_to_3d(tmpCentroidPrev2d, depth);
-//                 
-//                 cv::Point3d centroidCurr3d = cv::Point3d(tmpCentroidCurr3d[0], tmpCentroidCurr3d[1], tmpCentroidCurr3d[2]);
-//                 cv::Point3d centroidPrev3d = cv::Point3d(tmpCentroidPrev3d[0], tmpCentroidPrev3d[1], tmpCentroidPrev3d[2]);
-//                 
-//                 const double & dist = cv::norm(centroidCurr3d - centroidPrev3d);
-//                 
-//                 cout << i << ": " << centroidCurr << ", " << centroidPrev << " --> " << centroidCurr3d << ", " << centroidPrev3d << " = " << dist << ", " << polarDist << endl;
-        }
-    }
+        cv::dilate(diffPolarGray, diffPolarGray, cv::Mat(), cv::Point(-1,-1));
 
-    // Aggregation
-//     cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-//     uint32_t count = 1;
-//     for (uint32_t i = 1; i < m_obstacles.size(); i++) {
-//         if ((fabs(m_obstacles[i].roi3d.min.z - m_obstacles[i - 1].roi3d.min.z) > 1.0) ||
-//             ((m_obstacles[i].roi3d.min.x - m_obstacles[i - 1].roi3d.max.x) > 0.20)) {
-//             count++;
-//             color = cv::Scalar(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-//         }
-//         
-//         cout << i << ": " << m_obstacles[i].roi3d.min << ", " << 
-//                             m_obstacles[i].roi3d.max << ", " << 
-//                             m_obstacles[i].roi3d.mean << endl;
-//         cout << i << ": " << m_obstacles[i].roi3d.width << ", " <<
-//                             m_obstacles[i].roi3d.height << ", " <<
-//                             m_obstacles[i].roi3d.length << "; " <<
-//                             m_obstacles[i].roi3d.stdDev << endl;
-//         if (((m_obstacles[i].roi3d.width) > 0.5) &&
-//             ((m_obstacles[i].roi3d.height) > 1.5)) {
+        // Visualize thresholded difference
+        diffPolar.copyTo(roiImgPolar);
+        
+        // Obstacles are evaluated
+        BOOST_FOREACH(t_obstacle & currObstacle, m_obstacles) {
+            
+            if (currObstacle.valid) 
+                cv::rectangle(roiImgPolar, cv::Point2i(currObstacle.roi.x, currObstacle.roi.y),
+                              cv::Point2i(currObstacle.roi.x + currObstacle.roi.width, currObstacle.roi.y + currObstacle.roi.height),
+                              cv::Scalar(0, 255, 0), 2);
+            else
+                cv::rectangle(roiImgPolar, cv::Point2i(currObstacle.roi.x, currObstacle.roi.y),
+                              cv::Point2i(currObstacle.roi.x + currObstacle.roi.width, currObstacle.roi.y + currObstacle.roi.height),
+                              cv::Scalar(0, 0, 255), 2);
+        }
+//         for (uint32_t i = 0; i < m_obstacles.size(); i++) {
 //             
-//             cv::rectangle(roiImgAggr, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
-//                             cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-//                             color, 1);
+//             cv::Mat obstacle = diffPolarGray(m_obstacles[i].roi);
+//             
+//             cv::Mat occupancyMap = cv::Mat::zeros(ceil(m_obstacles[i].roi3d.height / gridSize), ceil(m_obstacles[i].roi3d.width / gridSize), CV_8UC1);
+//             
+//             double factorX = (double)occupancyMap.cols / obstacle.cols;
+//             double factorY = (double)occupancyMap.rows / obstacle.rows;
+//             for (uint32_t y = obstacle.rows / 2.0; y < obstacle.rows; y++)  {
+//                 for (uint32_t x = 0; x < obstacle.cols; x++)  {
+//                     if (obstacle.at<uchar>(y, x) != 0) {
+//                         occupancyMap.at<uchar>(y * factorY, x * factorX) = 0xFF;
+//                     }
+//                 }
+//             }
+//             
+//             occupancyMap = occupancyMap(cv::Rect(0, occupancyMap.rows / 2.0, occupancyMap.cols, ceil(occupancyMap.rows / 2.0)));
+//             
+//             if (cv::mean(occupancyMap)[0] > 100)
+//                 cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
+//                           cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
+//                           cv::Scalar(0, 255, 0), 2);
+//             else
+//                 cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
+//                               cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
+//                               cv::Scalar(0, 0, 255), 2);
+//             
 //         }
-//     }
-//     cout << "Total " << count << endl;
+    }
 
     cv::imshow("StixelsEvol", img);
 }

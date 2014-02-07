@@ -330,7 +330,7 @@ bool StixelsApplicationROS::rectifyPolar()
     if (! m_doPolarCalib)
         return true;
     
-    if (mp_video_input->get_current_frame_number() < m_initialFrame + 3)
+    if (mp_video_input->get_current_frame_number() < m_initialFrame + 2)
         return true;
     
     cv::Mat prevLeft, prevRight, currRight, FL, FR;
