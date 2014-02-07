@@ -1725,8 +1725,6 @@ void StixelsTracker::filterObstacles()
         
         cv::cvtColor(diffPolarGray, diffPolar, CV_GRAY2BGR);
         
-        cv::dilate(diffPolarGray, diffPolarGray, cv::Mat(), cv::Point(-1,-1));
-        
         // Obstacles are evaluated
         BOOST_FOREACH(t_obstacle & currObstacle, m_obstacles) {
             
@@ -1799,9 +1797,10 @@ void StixelsTracker::trackObstacles()
     
     if (prevObstacles.size() == 0) {
         m_obstaclesTracker.resize(m_obstacles.size());
-        
+
         for (uint32_t i = 0; i < m_obstacles.size(); i++) {
-            m_obstaclesTracker[i].push_front(m_obstacles[i]);
+            m_obstaclesTracker[i].track.push_front(m_obstacles[i]);
+            m_obstaclesTracker[i].validCount = (m_obstacles[i].valid)? 1 : -1;
         }
         
         return;
@@ -1891,7 +1890,7 @@ void StixelsTracker::trackObstacles()
     
     const lemon::SmartGraph::NodeMap<lemon::SmartGraph::Arc> & matchingMap = graphMatcher.matchingMap();
     
-    vector < deque < t_obstacle> > prevObstaclesTracker;
+    t_obstaclesTracker prevObstaclesTracker;
     prevObstaclesTracker.swap(m_obstaclesTracker);
     
     m_obstaclesTracker.clear();
@@ -1902,10 +1901,11 @@ void StixelsTracker::trackObstacles()
             lemon::SmartGraph::Arc arc = matchingMap[graph.nodeFromId(i)];
 //             cout << i << " -> " << graph.id(graph.target(arc)) - prevObstacles.size() << endl;
             int currIdx = graph.id(graph.target(arc)) - prevObstacles.size();
-            deque <t_obstacle> & track = prevObstaclesTracker[i];
-            track.push_front(m_obstacles[currIdx]);
+            t_obstaclesTrack & obstacleTrack = prevObstaclesTracker[i];
+            obstacleTrack.track.push_front(m_obstacles[currIdx]);
+            obstacleTrack.validCount += m_obstacles[currIdx].valid? 1 : -1;
             
-            m_obstaclesTracker[currIdx] = track;
+            m_obstaclesTracker[currIdx] = obstacleTrack;
         }
     }
     
@@ -1963,38 +1963,41 @@ void StixelsTracker::trackObstacles()
         cv::putText(roiImgPrev, oss.str(), cv::Point2i(prevObstacles[i].roi.x, prevObstacles[i].roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
     }
     
-    BOOST_FOREACH(const deque<t_obstacle> & track, m_obstaclesTracker) {
+    BOOST_FOREACH(const t_obstaclesTrack & obstaclesTrack, m_obstaclesTracker) {
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         
-        double speed = 0.0;
-        for (uint32_t i = 1; i < track.size(); i++) {
-            cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y), 
-                     cv::Point2i(track[i - 1].roi.x, track[i - 1].roi.y), color, 1);
-            cv::line(roiImgTrack, cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y), 
-                     cv::Point2i(track[i - 1].roi.x + track[i - 1].roi.width, track[i - 1].roi.y), color, 1);
-            cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y + track[i].roi.height), 
-                     cv::Point2i(track[i - 1].roi.x, track[i - 1].roi.y + track[i - 1].roi.height), color, 1);
-            cv::line(roiImgTrack, cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y + track[i].roi.height), 
-                     cv::Point2i(track[i - 1].roi.x + track[i - 1].roi.width, track[i - 1].roi.y + track[i - 1].roi.height), color, 1);
-            cv::rectangle(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y),
-                          cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y + track[i].roi.height),
-                          color, 1);
-            speed += sqrt((track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) * (track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) +
-//                           (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) * (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) + 
-                          (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z) * (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z));
-        }
-        speed /= track.size() * 0.07692307692307692308;
-        if (track.size() != 0) {
-            cv::rectangle(roiImgTrack, cv::Point2i(track[0].roi.x, track[0].roi.y),
-                      cv::Point2i(track[0].roi.x + track[0].roi.width, track[0].roi.y + track[0].roi.height),
-                      color, 1);
-            
-            t_obstacle lastObstacle = track[track.size() - 1];
-            cv::rectangle(roiImgTrack, cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y),
-                          cv::Point2i(lastObstacle.roi.x + 20, lastObstacle.roi.y - 10), cv::Scalar::all(255), -1);
-            stringstream oss;
-            oss << speed;
-            cv::putText(roiImgTrack, oss.str(), cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
+        const t_track & track = obstaclesTrack.track;
+        if (obstaclesTrack.validCount >= 0) {
+            double speed = 0.0;
+            for (uint32_t i = 1; i < track.size(); i++) {
+                cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y), 
+                        cv::Point2i(track[i - 1].roi.x, track[i - 1].roi.y), color, 1);
+                cv::line(roiImgTrack, cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y), 
+                        cv::Point2i(track[i - 1].roi.x + track[i - 1].roi.width, track[i - 1].roi.y), color, 1);
+                cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y + track[i].roi.height), 
+                        cv::Point2i(track[i - 1].roi.x, track[i - 1].roi.y + track[i - 1].roi.height), color, 1);
+                cv::line(roiImgTrack, cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y + track[i].roi.height), 
+                        cv::Point2i(track[i - 1].roi.x + track[i - 1].roi.width, track[i - 1].roi.y + track[i - 1].roi.height), color, 1);
+                cv::rectangle(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y),
+                            cv::Point2i(track[i].roi.x + track[i].roi.width, track[i].roi.y + track[i].roi.height),
+                            color, 1);
+                speed += sqrt((track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) * (track[i].roi3d.mean.x - track[i - 1].roi3d.mean.x) +
+    //                           (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) * (track[i].roi3d.mean.y - track[i - 1].roi3d.mean.y) + 
+                            (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z) * (track[i].roi3d.mean.z - track[i - 1].roi3d.mean.z));
+            }
+            speed /= track.size() * 0.07692307692307692308;
+            if (track.size() != 0) {
+                cv::rectangle(roiImgTrack, cv::Point2i(track[0].roi.x, track[0].roi.y),
+                        cv::Point2i(track[0].roi.x + track[0].roi.width, track[0].roi.y + track[0].roi.height),
+                        color, 2);
+                
+                t_obstacle lastObstacle = track[track.size() - 1];
+                cv::rectangle(roiImgTrack, cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y),
+                            cv::Point2i(lastObstacle.roi.x + 20, lastObstacle.roi.y - 10), cv::Scalar::all(255), -1);
+                stringstream oss;
+                oss << speed;
+                cv::putText(roiImgTrack, oss.str(), cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
+            }
         }
     }
     
@@ -2056,34 +2059,6 @@ void StixelsTracker::trackObstacles()
                               cv::Point2i(currObstacle.roi.x + currObstacle.roi.width, currObstacle.roi.y + currObstacle.roi.height),
                               cv::Scalar(0, 0, 255), 2);
         }
-//         for (uint32_t i = 0; i < m_obstacles.size(); i++) {
-//             
-//             cv::Mat obstacle = diffPolarGray(m_obstacles[i].roi);
-//             
-//             cv::Mat occupancyMap = cv::Mat::zeros(ceil(m_obstacles[i].roi3d.height / gridSize), ceil(m_obstacles[i].roi3d.width / gridSize), CV_8UC1);
-//             
-//             double factorX = (double)occupancyMap.cols / obstacle.cols;
-//             double factorY = (double)occupancyMap.rows / obstacle.rows;
-//             for (uint32_t y = obstacle.rows / 2.0; y < obstacle.rows; y++)  {
-//                 for (uint32_t x = 0; x < obstacle.cols; x++)  {
-//                     if (obstacle.at<uchar>(y, x) != 0) {
-//                         occupancyMap.at<uchar>(y * factorY, x * factorX) = 0xFF;
-//                     }
-//                 }
-//             }
-//             
-//             occupancyMap = occupancyMap(cv::Rect(0, occupancyMap.rows / 2.0, occupancyMap.cols, ceil(occupancyMap.rows / 2.0)));
-//             
-//             if (cv::mean(occupancyMap)[0] > 100)
-//                 cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
-//                           cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-//                           cv::Scalar(0, 255, 0), 2);
-//             else
-//                 cv::rectangle(roiImgPolar, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
-//                               cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-//                               cv::Scalar(0, 0, 255), 2);
-//             
-//         }
     }
 
     cv::imshow("StixelsEvol", img);

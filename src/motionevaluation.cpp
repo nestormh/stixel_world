@@ -548,8 +548,10 @@ void MotionEvaluation::getAnnotationsFromObstacleTracks(const StixelsTracker::t_
 {
     detections.resize(tracker.size());
     
-    BOOST_FOREACH (const deque < StixelsTracker::t_obstacle> & track, tracker) {
-        if (track.size() > idx) {
+    BOOST_FOREACH (const StixelsTracker::t_obstaclesTrack & obstaclesTrack, tracker) {
+        const StixelsTracker::t_track & track = obstaclesTrack.track;
+        
+        if ((track.size() > idx) && (obstaclesTrack.validCount >= 0)) {
             const StixelsTracker::t_obstacle & obstacle = track[idx];
             
             t_annotation annotation;
@@ -659,9 +661,10 @@ void MotionEvaluation::evaluateDisparity(const doppia::AbstractVideoInput::input
 
         dispObjects = cv::Mat::zeros(left.rows, left.cols, CV_64F);
 
-        BOOST_FOREACH (const deque < StixelsTracker::t_obstacle> & track, obstaclesTracker) {
+        BOOST_FOREACH (const StixelsTracker::t_obstaclesTrack & obstacleTrack, obstaclesTracker) {
+            const StixelsTracker::t_track & track = obstacleTrack.track;
             
-            if (track.size() == 0)
+            if ((track.size() == 0) && (obstacleTrack.validCount >= 0))
                 continue;
             
             const StixelsTracker::t_obstacle & obstacle = track[0];

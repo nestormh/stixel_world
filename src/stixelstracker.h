@@ -75,7 +75,12 @@ public:
         bool valid;
     } t_obstacle;
     
-    typedef vector < deque < t_obstacle> > t_obstaclesTracker;
+    typedef deque < t_obstacle> t_track;
+    typedef struct {
+        t_track track;
+        int validCount;
+    } t_obstaclesTrack;
+    typedef vector < t_obstaclesTrack > t_obstaclesTracker;
     typedef vector < stixels3d_t > t_tracker;
     typedef deque <stixels3d_t> t_historic;
     
@@ -168,7 +173,7 @@ protected:
     vector <int> m_currObstacleCorresp;
     vector <int> m_prevObstacleCorresp;
     
-    vector < deque < t_obstacle> > m_obstaclesTracker;
+    t_obstaclesTracker m_obstaclesTracker;
     
     double m_minAllowedObjectWidth;
     double m_minDistBetweenClusters;
