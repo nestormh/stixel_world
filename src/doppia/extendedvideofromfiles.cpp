@@ -97,13 +97,13 @@ ExtendedVideoFromFiles::ExtendedVideoFromFiles(const program_options::variables_
 /// Advance in stream, return true if successful
 bool ExtendedVideoFromFiles::next_frame()
 {
-    return this->set_frame(current_frame_number + 10);
+    return this->set_frame(current_frame_number + 3);
 }
 
 /// Go back in stream
 bool ExtendedVideoFromFiles::previous_frame()
 {
-    return this->set_frame(current_frame_number - 10);
+    return this->set_frame(current_frame_number - 3);
 }
     
 }

@@ -46,7 +46,7 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
 {
     m_options = parseOptionsFile(optionsFile);
     
-    mp_video_input.reset(doppia::VideoInputFactory::new_instance(m_options));
+    mp_video_input.reset(doppia::ExtendedVideoInputFactory::new_instance(m_options));
     
     if(not mp_video_input)
     {
@@ -330,7 +330,7 @@ bool StixelsApplicationROS::rectifyPolar()
     if (! m_doPolarCalib)
         return true;
     
-    if (mp_video_input->get_current_frame_number() == m_initialFrame)
+    if (mp_video_input->get_current_frame_number() < m_initialFrame + 3)
         return true;
     
     cv::Mat prevLeft, prevRight, currRight, FL, FR;

@@ -64,6 +64,7 @@ public:
             cv::Point3d centroid;
             
             double width, length, height;
+            double stdDev;
         } t_roi3d;
         
         cv::Rect roi;
