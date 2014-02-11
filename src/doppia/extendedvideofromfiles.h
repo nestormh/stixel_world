@@ -53,6 +53,8 @@ public:
     bool previous_frame();
 protected:
     
+    int m_increment;
+    
 //     void read_future_frame_thead();
 };
 }

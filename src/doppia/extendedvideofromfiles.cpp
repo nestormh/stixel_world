@@ -38,6 +38,8 @@
 #include "helpers/get_option_value.hpp"
 #include "helpers/get_section_options.hpp"
 
+#include <ros/ros.h>
+
 #include <string>
 
 using namespace std;
@@ -91,19 +93,21 @@ ExtendedVideoFromFiles::ExtendedVideoFromFiles(const program_options::variables_
                                const shared_ptr<StereoCameraCalibration> &stereo_calibration_p)
                     : VideoFromFiles(options, stereo_calibration_p)
 {
-
+    
+    ros::NodeHandle nh("~");
+    nh.param("increment", m_increment, 1);
 }
     
 /// Advance in stream, return true if successful
 bool ExtendedVideoFromFiles::next_frame()
 {
-    return this->set_frame(current_frame_number + 1);
+    return this->set_frame(current_frame_number + m_increment);
 }
 
 /// Go back in stream
 bool ExtendedVideoFromFiles::previous_frame()
 {
-    return this->set_frame(current_frame_number - 1);
+    return this->set_frame(current_frame_number - m_increment);
 }
     
 }

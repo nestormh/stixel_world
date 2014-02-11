@@ -61,6 +61,7 @@ private:
     void visualize2();
     void visualize3();
     void publishStixels();
+    void publishStixelsInObjects();
     bool rectifyPolar();
     void transformStixels();
     
@@ -103,11 +104,9 @@ private:
     
     bool m_firstIteration;
     
-    // ROS parameters
-    bool m_useGraph, m_useCostMatrix, m_useObjects;
-    double m_SADFactor, m_heightFactor, m_polarDistFactor, m_polarSADFactor, m_histBatFactor;
-    
     uint32_t m_frameBufferLength;
+    
+    int m_increment;
     
 // protected:
 //     void waitForKey(&m_waitTime arg1);

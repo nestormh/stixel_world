@@ -38,7 +38,7 @@ using namespace std;
 
 namespace stixel_world {
     
-#define MAX_LENGTH 51 //2 //51
+#define MAX_LENGTH 2 //2 //51
     
 typedef struct {
     cv::Point2i ul;
@@ -76,7 +76,7 @@ public:
                                   const boost::shared_ptr<StixelsTracker> & p_stixel_motion_estimator);
     
     void evaluate(const uint32_t & currentFrame);
-    void evaluatePerFrame(const uint32_t & currentFrame);
+    void evaluatePerFrame(const uint32_t & currentFrame, const uint32_t increment = 1);
     void evaluatePerFrameWithObstacles(const uint32_t & currentFrame);
     void evaluateDisparity(const doppia::AbstractVideoInput::input_image_view_t & leftView, 
                            const doppia::AbstractVideoInput::input_image_view_t & rightView,

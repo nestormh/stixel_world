@@ -331,7 +331,7 @@ void MotionEvaluation::evaluate(const uint32_t & currentFrame)
         saveResults();
 }
 
-void MotionEvaluation::evaluatePerFrame(const uint32_t & currentFrame)
+void MotionEvaluation::evaluatePerFrame(const uint32_t & currentFrame, const uint32_t increment)
 {
     if ((currentFrame < MAX_LENGTH + 1) || (! m_evaluationActivated))
         return;
@@ -340,13 +340,16 @@ void MotionEvaluation::evaluatePerFrame(const uint32_t & currentFrame)
         handler.counters.clear();
         handler.counters.resize(MAX_LENGTH);
         const StixelsTracker::t_historic & historic = (handler.p_stixel_motion_estimator)->getHistoric();
+        if (historic.size() < MAX_LENGTH + 1) {
+            continue;
+        }
         for (uint32_t j = 1; j <= MAX_LENGTH; j++) {
             const uint32_t evaluatedFrame = currentFrame - j;
             
             vector< t_annotation > detections;
             getAnnotationsFromTracks(historic, j, currentFrame, detections);
             
-            vector < t_annotation> annotations = m_annotations[currentFrame];
+            vector < t_annotation> annotations = m_annotations[currentFrame / increment];
             uint32_t tmpTp, tmpFn, tmpFp;
             countErrors(0.0f, annotations, detections, tmpTp, tmpFn, tmpFp);
             
@@ -494,8 +497,8 @@ void MotionEvaluation::countErrors(const float& detectionThresh, const vector< t
     fn = tmpGT.size();
 }
 
-void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic & historic, const uint32_t& idx, const uint32_t & currentFrame,
-                                                vector< t_annotation >& detections)
+void MotionEvaluation::getAnnotationsFromTracks(const StixelsTracker::t_historic & historic, const uint32_t& idx, 
+                                                const uint32_t & currentFrame, vector< t_annotation >& detections)
 {
     vector< t_annotation > gt = m_annotations[currentFrame - idx];
     detections.reserve(gt.size());

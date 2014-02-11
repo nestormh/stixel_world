@@ -40,7 +40,8 @@ public:
     void set_motion_cost_factors(const float & sad_factor, const float & height_factor, 
                                  const float & polar_dist_factor, const float & polar_sad_factor,
                                  const float & dense_tracking_factor, const float & hist_similarity_factor, 
-                                 const bool & useGraphs, const bool & useCostMatrix, const bool & useObjects);
+                                 const bool & useGraphs, const bool & useCostMatrix, const bool & useObjects,
+                                 const bool & twoLevelsTracking);
     
     void updateDenseTracker(const cv::Mat & frame);
     
@@ -129,6 +130,7 @@ protected:
     void aggregateObstacles();
     void filterObstacles();
     void getObstacleFromStixelsList(const stixels_t& stixels, const uint32_t& idx1, const uint32_t& idx2, stixel_world::StixelsTracker::t_obstacle& bstacl);
+    void updateTrackerFromObstacles();
     
     double getNcc(const cv::Mat & img1, const cv::Mat & img2, const cv::Rect & rect1, const cv::Rect & rect2);
 //     void computeHistogram(cv::Mat & hist, const cv::Mat & img, const Stixel & stixel);
@@ -157,7 +159,7 @@ protected:
     float m_dense_tracking_factor; // Dense tracking
     float m_hist_similarity_factor; // Histogram similarity
     
-    bool m_useGraphs, m_useCostMatrix, m_useObjects;
+    bool m_useGraphs, m_useCostMatrix, m_useObjects, m_twoLevelsTracking;
     
     float m_minPolarSADForBeingStatic;
     

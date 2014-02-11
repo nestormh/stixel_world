@@ -42,6 +42,7 @@ namespace stixel_world {
     inline void gil2opencv(const T & view, cv::Mat & imgOpenCV) {    
         imgOpenCV = cv::Mat(view.height(), view.width(), CV_8UC3);
         
+        #pragma omp parallel for schedule(static)
         for (uint32_t y = 0; y < imgOpenCV.rows; y++) {
             for (uint32_t x = 0; x < imgOpenCV.cols; x++) {
                 cv::Vec3b & pxOCV = imgOpenCV.at<cv::Vec3b>(y, x);
