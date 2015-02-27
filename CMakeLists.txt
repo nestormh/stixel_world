@@ -12,16 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   tf2_ros
   cv_bridge
-#   image_transport
-#   camera_calibration_parsers
-#   message_generation
+  image_transport
+  camera_calibration_parsers
 )
 
 set(ROS_BUILD_TYPE Release)
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp -msse3")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -ffast-math -unroll-loops -march=native -fopenmp -msse3")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native -fopenmp -msse3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native -fopenmp -msse3 -std=c++0x")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native -std=c++0x -fopenmp")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -march=native -std=c++0x")
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})

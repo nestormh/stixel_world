@@ -3,4 +3,10 @@ PointMatch.bak/
 compiler_bind/
 cudaLK/
 tmp/
-
+libs/libelas/CMakeLists.txt
+libs/libelas/README.TXT
+libs/libelas/main.cpp
+libs/libelas/matlab/
+libs/libelas/src/
+matlab/
+paper/

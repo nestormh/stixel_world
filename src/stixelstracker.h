@@ -182,6 +182,8 @@ protected:
     
     cv::Mat m_currImg;
     
+    uint32_t m_frameIdx;
+    
 };
 }
 

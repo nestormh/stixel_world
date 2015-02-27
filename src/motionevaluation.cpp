@@ -582,52 +582,109 @@ void MotionEvaluation::visualizeDisparityMap(const cv::Mat & map, cv::Mat & fals
     applyColorMap(scaledMap, falseColorsMap, cv::COLORMAP_JET);
 }
 
+void overlayImage(const cv::Mat &background, const cv::Mat &foreground, 
+                  cv::Mat &output, cv::Point2i location, const double & alpha, const cv::Scalar & nullColor)
+{
+    background.copyTo(output);
+    
+    
+    // start at the row indicated by location, or at row 0 if location.y is negative.
+    for(int y = std::max(location.y , 0); y < background.rows; ++y)
+    {
+        int fY = y - location.y; // because of the translation
+        
+        // we are done of we have processed all rows of the foreground image.
+        if(fY >= foreground.rows)
+            break;
+        
+        // start at the column indicated by location, 
+        
+        // or at column 0 if location.x is negative.
+        for(int x = std::max(location.x, 0); x < background.cols; ++x)
+        {
+            const cv::Vec3b & currColor = foreground.at<cv::Vec3b>(y, x);
+            if ((currColor[0] == nullColor[0]) &&
+                (currColor[1] == nullColor[1]) &&
+                (currColor[2] == nullColor[2]))
+                continue;
+            
+            int fX = x - location.x; // because of the translation.
+            
+            // we are done with this row if the column is outside of the foreground image.
+            if(fX >= foreground.cols)
+                break;
+            
+            // determine the opacity of the foregrond pixel, using its fourth (alpha) channel.
+            double opacity =
+            ((double)foreground.data[fY * foreground.step + fX * foreground.channels() + 3])
+            
+            / 255.;
+            
+            
+            // and now combine the background and foreground pixel, using the opacity, 
+            
+            // but only if opacity > 0.
+            opacity = alpha;
+            for(int c = 0; opacity > 0 && c < output.channels(); ++c)
+            {
+                unsigned char foregroundPx =
+                foreground.data[fY * foreground.step + fX * foreground.channels() + c];
+                unsigned char backgroundPx =
+                background.data[y * background.step + x * background.channels() + c];
+                output.data[y*output.step + output.channels()*x + c] =
+                backgroundPx * (1.-opacity) + foregroundPx * opacity;
+            }
+        }
+    }
+}
+
 void MotionEvaluation::evaluateDisparity(const doppia::AbstractVideoInput::input_image_view_t& leftView, 
                                          const doppia::AbstractVideoInput::input_image_view_t& rightView,
                                          const uint32_t & currentFrame)
 {
     cv::Mat left, right;
-    cv::Mat leftGray, rightGray;
+//     cv::Mat leftGray, rightGray;
     cv::Mat dispELAS, scaledMapELAS, colorMapELAS, maskELAS;
     cv::Mat dispStixels, scaledMapStixels, colorMapStixels, maskStixels;
     cv::Mat dispObjects, scaledMapObjects, colorMapObjects, maskObjects;
     gil2opencv(leftView, right);
     gil2opencv(rightView, left);
-    
-    cv::cvtColor(left, leftGray, CV_BGR2GRAY);
-    cv::cvtColor(right, rightGray, CV_BGR2GRAY);
-    
-    Elas elas(Elas::parameters(Elas::ROBOTICS));
-    
-    dispELAS = cv::Mat(left.rows, left.cols, CV_64F);
-    
-    int32_t dims[3];
-    dims[0] = leftGray.cols;
-    dims[1] = leftGray.rows;
-    dims[2] = leftGray.cols;
-    
-    float * D1 = new float[leftGray.cols * leftGray.rows];
-    float * D2 = new float[rightGray.cols * rightGray.rows];
-    
-    elas.process((uint8_t *)leftGray.data, (uint8_t *)rightGray.data, D1, D2, dims);
-    
-    for (uint32_t y = 0; y < leftGray.rows; y++) {
-        for (uint32_t x = 0; x < leftGray.cols; x++) {
-            dispELAS.at<double>(y, x) = D1[y * leftGray.cols + x];
-        }
-    }
-    
-    delete D1;
-    delete D2;
-    
-    visualizeDisparityMap(dispELAS, colorMapELAS, scaledMapELAS);
-    cv::threshold(scaledMapELAS, maskELAS, 0, 255, cv::THRESH_BINARY);
-//     cv::imshow("colorMapELAS", colorMapELAS);
-//     cv::imshow("maskELAS", maskELAS);
-//     cv::imshow("scaledMapELAS", scaledMapELAS);
+//     
+//     cv::cvtColor(left, leftGray, CV_BGR2GRAY);
+//     cv::cvtColor(right, rightGray, CV_BGR2GRAY);
+//     
+//     Elas elas(Elas::parameters(Elas::ROBOTICS));
+//     
+//     dispELAS = cv::Mat(left.rows, left.cols, CV_64F);
+//     
+//     int32_t dims[3];
+//     dims[0] = leftGray.cols;
+//     dims[1] = leftGray.rows;
+//     dims[2] = leftGray.cols;
+//     
+//     float * D1 = new float[leftGray.cols * leftGray.rows];
+//     float * D2 = new float[rightGray.cols * rightGray.rows];
+//     
+//     elas.process((uint8_t *)leftGray.data, (uint8_t *)rightGray.data, D1, D2, dims);
+//     
+//     for (uint32_t y = 0; y < leftGray.rows; y++) {
+//         for (uint32_t x = 0; x < leftGray.cols; x++) {
+//             dispELAS.at<double>(y, x) = D1[y * leftGray.cols + x];
+//         }
+//     }
+//     
+//     delete D1;
+//     delete D2;
+//     
+//     visualizeDisparityMap(dispELAS, colorMapELAS, scaledMapELAS);
+//     cv::threshold(scaledMapELAS, maskELAS, 0, 255, cv::THRESH_BINARY);
+// //     cv::imshow("colorMapELAS", colorMapELAS);
+// //     cv::imshow("maskELAS", maskELAS);
+// //     cv::imshow("scaledMapELAS", scaledMapELAS);
     
     ///////////////////////////////////////////////////////////////////////////////////
     dispStixels = cv::Mat::zeros(left.rows, left.cols, CV_64F);
+    
     
     BOOST_FOREACH(t_statistics_handler & handler, m_statistics_handlers) {
         const stixels_t stixels = handler.p_stixel_world_estimator->get_stixels();
@@ -636,74 +693,92 @@ void MotionEvaluation::evaluateDisparity(const doppia::AbstractVideoInput::input
             
             for (uint32_t y = stixel.top_y; y <= stixel.bottom_y; y++) {
                 if (stixel.x + disp < dispStixels.cols) {
-                    if (dispStixels.at<double>(y, stixel.x + disp) == 0)
-                        dispStixels.at<double>(y, stixel.x + disp) = 64.0 - disp;
-                    else
-                        dispStixels.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispStixels.at<double>(y, stixel.x + disp));
+//                     if (dispStixels.at<double>(y, stixel.x + disp) == 0)
+//                         dispStixels.at<double>(y, stixel.x + disp) = 64.0 - disp;
+//                     else
+//                         dispStixels.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispStixels.at<double>(y, stixel.x + disp));
+                    dispStixels.at<double>(y, stixel.x) = 64.0 - disp + 1;
                 }
             }
         }
         visualizeDisparityMap(dispStixels, colorMapStixels, scaledMapStixels);
         cv::threshold(scaledMapStixels, maskStixels, 0, 255, cv::THRESH_BINARY);
+        cv::Mat overlayStixels;
+        overlayImage(right, colorMapStixels, overlayStixels, cv::Point2i(0, 0), 0.60, cv::Scalar(128, 0, 0));
+        
 //         cv::imshow("colorMapStixels", colorMapStixels);
+        cv::imshow("overlayStixels", overlayStixels);
+        
+        
+        
+        stringstream ssOverlay;
+        ssOverlay << "/home/nestor/Vídeos/StixelWorld/overlay/Image";
+        ssOverlay.width(5);
+        ssOverlay.fill('0');
+        ssOverlay << currentFrame - 2;
+        ssOverlay << ".png";
+        
+        
+        cv::imwrite(ssOverlay.str(), overlayStixels);
+        
 //         cv::imshow("scaledMapStixels", scaledMapStixels);
 //         cv::imshow("maskStixels", maskStixels);
-        cv::Mat maskStixelsandELAS; 
-        cv::bitwise_and(maskStixels, maskELAS, maskStixelsandELAS);
-// //         cv::imshow("maskStixelsandELAS", maskStixelsandELAS);
-        cv::Mat diffStixelsAndELAS;
-        cv::absdiff(scaledMapELAS, scaledMapStixels, diffStixelsAndELAS);
-//         cv::imshow("diffStixelsAndELAS0", diffStixelsAndELAS);
-        cv::bitwise_and(maskStixelsandELAS, diffStixelsAndELAS, diffStixelsAndELAS);
-//         cv::imshow("diffStixelsAndELAS", diffStixelsAndELAS);
-        
-        cv::Scalar avgDiffStixelsELAS = cv::mean(diffStixelsAndELAS, maskStixelsandELAS);
+//         cv::Mat maskStixelsandELAS; 
+//         cv::bitwise_and(maskStixels, maskELAS, maskStixelsandELAS);
+// // //         cv::imshow("maskStixelsandELAS", maskStixelsandELAS);
+//         cv::Mat diffStixelsAndELAS;
+//         cv::absdiff(scaledMapELAS, scaledMapStixels, diffStixelsAndELAS);
+// //         cv::imshow("diffStixelsAndELAS0", diffStixelsAndELAS);
+//         cv::bitwise_and(maskStixelsandELAS, diffStixelsAndELAS, diffStixelsAndELAS);
+// //         cv::imshow("diffStixelsAndELAS", diffStixelsAndELAS);
+//         
+//         cv::Scalar avgDiffStixelsELAS = cv::mean(diffStixelsAndELAS, maskStixelsandELAS);
         
         ////////////////////////////////////////////////////////////////////////////////////////////
-        const StixelsTracker::t_obstaclesTracker & obstaclesTracker = (handler.p_stixel_motion_estimator)->getObstaclesTracker();
-
-        dispObjects = cv::Mat::zeros(left.rows, left.cols, CV_64F);
-
-        BOOST_FOREACH (const StixelsTracker::t_obstaclesTrack & obstacleTrack, obstaclesTracker) {
-            const StixelsTracker::t_track & track = obstacleTrack.track;
-            
-            if ((track.size() == 0) && (obstacleTrack.validCount >= 0))
-                continue;
-            
-            const StixelsTracker::t_obstacle & obstacle = track[0];
-            
-            const int & disp = obstacle.disparity;
-            BOOST_FOREACH(const Stixel3d & stixel, obstacle.stixels) {
-                const int & disp = stixel.disparity;
-                for (uint32_t y = stixel.top_y; y <= stixel.bottom_y; y++) {
-                    if (stixel.x + disp < dispObjects.cols) {
-                        if (dispObjects.at<double>(y, stixel.x + disp) == 0)
-                            dispObjects.at<double>(y, stixel.x + disp) = 64.0 - disp;
-                        else
-                            dispObjects.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispObjects.at<double>(y, stixel.x + disp));
-                    }
-                }
-            }
-        }
-        visualizeDisparityMap(dispObjects, colorMapObjects, scaledMapObjects);
-        cv::threshold(scaledMapObjects, maskObjects, 0, 255, cv::THRESH_BINARY);
-//                 cv::imshow("colorMapObjects", colorMapObjects);
-//                 cv::imshow("scaledMapObjects", scaledMapObjects);
-//                 cv::imshow("maskObjects", maskObjects);
-        cv::Mat maskObjectsandELAS; 
-        cv::bitwise_and(maskObjects, maskELAS, maskObjectsandELAS);
-//                 cv::imshow("maskObjectsandELAS", maskObjectsandELAS);
-        cv::Mat diffObjectsAndELAS;
-        cv::absdiff(scaledMapELAS, scaledMapObjects, diffObjectsAndELAS);
-//                 cv::imshow("diffObjectsAndELAS0", diffObjectsAndELAS);
-        cv::bitwise_and(maskObjectsandELAS, diffObjectsAndELAS, diffObjectsAndELAS);
-//                 cv::imshow("diffObjectsAndELAS", diffObjectsAndELAS);
-        
-        cv::Scalar avgDiffELASObjects = cv::mean(diffObjectsAndELAS, maskObjectsandELAS);
-        cv::Scalar avgDiffELASObjectsMaskStixels = cv::mean(diffObjectsAndELAS, maskStixelsandELAS);
-
-        ROS_ERROR("[EVALUATION_DISP] avgDiffStixelsELAS %f avgDiffELASObjects %f avgDiffELASObjectsMaskStixels %f", 
-                  avgDiffStixelsELAS[0], avgDiffELASObjects[0], avgDiffELASObjectsMaskStixels[0]);
+//         const StixelsTracker::t_obstaclesTracker & obstaclesTracker = (handler.p_stixel_motion_estimator)->getObstaclesTracker();
+// 
+//         dispObjects = cv::Mat::zeros(left.rows, left.cols, CV_64F);
+// 
+//         BOOST_FOREACH (const StixelsTracker::t_obstaclesTrack & obstacleTrack, obstaclesTracker) {
+//             const StixelsTracker::t_track & track = obstacleTrack.track;
+//             
+//             if ((track.size() == 0) && (obstacleTrack.validCount >= 0))
+//                 continue;
+//             
+//             const StixelsTracker::t_obstacle & obstacle = track[0];
+//             
+//             const int & disp = obstacle.disparity;
+//             BOOST_FOREACH(const Stixel3d & stixel, obstacle.stixels) {
+//                 const int & disp = stixel.disparity;
+//                 for (uint32_t y = stixel.top_y; y <= stixel.bottom_y; y++) {
+//                     if (stixel.x + disp < dispObjects.cols) {
+//                         if (dispObjects.at<double>(y, stixel.x + disp) == 0)
+//                             dispObjects.at<double>(y, stixel.x + disp) = 64.0 - disp;
+//                         else
+//                             dispObjects.at<double>(y, stixel.x + disp) = min(64.0 - disp, dispObjects.at<double>(y, stixel.x + disp));
+//                     }
+//                 }
+//             }
+//         }
+//         visualizeDisparityMap(dispObjects, colorMapObjects, scaledMapObjects);
+//         cv::threshold(scaledMapObjects, maskObjects, 0, 255, cv::THRESH_BINARY);
+// //                 cv::imshow("colorMapObjects", colorMapObjects);
+// //                 cv::imshow("scaledMapObjects", scaledMapObjects);
+// //                 cv::imshow("maskObjects", maskObjects);
+//         cv::Mat maskObjectsandELAS; 
+//         cv::bitwise_and(maskObjects, maskELAS, maskObjectsandELAS);
+// //                 cv::imshow("maskObjectsandELAS", maskObjectsandELAS);
+//         cv::Mat diffObjectsAndELAS;
+//         cv::absdiff(scaledMapELAS, scaledMapObjects, diffObjectsAndELAS);
+// //                 cv::imshow("diffObjectsAndELAS0", diffObjectsAndELAS);
+//         cv::bitwise_and(maskObjectsandELAS, diffObjectsAndELAS, diffObjectsAndELAS);
+// //                 cv::imshow("diffObjectsAndELAS", diffObjectsAndELAS);
+//         
+//         cv::Scalar avgDiffELASObjects = cv::mean(diffObjectsAndELAS, maskObjectsandELAS);
+//         cv::Scalar avgDiffELASObjectsMaskStixels = cv::mean(diffObjectsAndELAS, maskStixelsandELAS);
+// 
+//         ROS_ERROR("[EVALUATION_DISP] avgDiffStixelsELAS %f avgDiffELASObjects %f avgDiffELASObjectsMaskStixels %f", 
+//                   avgDiffStixelsELAS[0], avgDiffELASObjects[0], avgDiffELASObjectsMaskStixels[0]);
     }
     
 }

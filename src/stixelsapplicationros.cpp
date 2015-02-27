@@ -33,8 +33,13 @@
 #include <fstream>
 #include <eigen3/Eigen/src/Core/Matrix.h>
 
+#include <sensor_msgs/image_encodings.h>
+#include <cv_bridge/cv_bridge.h>
+
 #include <omp.h>
 #include <opencv2/core/core.hpp>
+
+#include "elas.h"
 
 #define CAMERA_FRAME_ID "left_cam"
 
@@ -63,10 +68,10 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     m_doPolarCalib = false;
     
     // ROS parameters
+    ros::NodeHandle nh("~");
     bool m_useGraph, m_useCostMatrix, m_useObjects, twoLevelsTracking;
     double m_SADFactor, m_heightFactor, m_polarDistFactor, m_polarSADFactor, m_histBatFactor;
-    ros::NodeHandle nh("~");
-    m_pointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("pointCloudStixels", 1);
+
     nh.param("useGraph", m_useGraph, true);
     nh.param("useCostMatrix", m_useCostMatrix, true);
     nh.param("useObjects", m_useObjects, true);
@@ -89,7 +94,7 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
         m_doPolarCalib = true;
     }
     
-    m_doPolarCalib = true;
+//     m_doPolarCalib = true;
     
     // TODO: Parameterize
     m_frameBufferLength = 2;
@@ -105,6 +110,29 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     cout << "twoLevelsTracking " << twoLevelsTracking << endl;
     cout << "m_doPolarCalib " << m_doPolarCalib << endl;
     cout << "***********************" << endl;
+    
+    // ROS publishers / suscribers
+    m_pointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("pointCloudStixels", 1);
+    m_fakePointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("fakePointCloud", 1);
+    m_stereoPointCloudPub = nh.advertise<sensor_msgs::PointCloud2> ("stereoPointCloud", 1);
+    
+    m_clockPub = nh.advertise<rosgraph_msgs::Clock> ("/clock", 1);
+    
+    image_transport::ImageTransport it(nh);
+    m_leftImgPub = it.advertise("left/image", 1);
+    m_rightImgPub = it.advertise("right/image", 1);
+    
+    m_leftInfoPub = nh.advertise<sensor_msgs::CameraInfo>("left/camera_info", 1);
+    m_righttInfoPub = nh.advertise<sensor_msgs::CameraInfo>("right/camera_info", 1);
+    
+    // TODO: Parameterize
+    string leftCalibFileName = "/local/imaged/stixels/bahnhof/left_calib.yaml";
+    string leftCameraName = "left_camera";
+    camera_calibration_parsers::readCalibrationYml(leftCalibFileName, leftCameraName, m_leftCameraInfo);
+    
+    string rightCalibFileName = "/local/imaged/stixels/bahnhof/right_calib.yaml";
+    string rightCameraName = "right_camera";
+    camera_calibration_parsers::readCalibrationYml(rightCalibFileName, rightCameraName, m_rightCameraInfo);
     
 //     NOTE: This is just for fast tuning of the motion estimators
 //     mp_stixels_tests.resize(6);
@@ -149,7 +177,6 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     } else {
         mp_stixel_motion_estimator = mp_stixels_tests[0];
     }
-    
     
     m_waitTime = 0;
     
@@ -241,14 +268,21 @@ void StixelsApplicationROS::runStixelsApplication()
 //     cv::namedWindow("polarTrack");
 //     cv::moveWindow("polarTrack", 1366, 0);
     
+    rosgraph_msgs::Clock clockMsg;
+    m_accTime = 0.0;
+    clockMsg.clock = ros::Time(m_accTime);
+    m_clockPub.publish(clockMsg);
+    ros::spinOnce();
+    
     m_prevLeftRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_left_image().dimensions());
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
     
     double startWallTime = omp_get_wtime();
     while (iterate()) {
-//         visualize();
+        visualize();
+        publishROS();
 //         publishStixels();
-//         publishStixelsInObjects();
+        publishStixelsInObjects();
         update();
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
         startWallTime = omp_get_wtime();
@@ -604,8 +638,8 @@ void StixelsApplicationROS::visualize()
         cv::Mat diffRect = cv::Mat::zeros(mp_video_input->get_left_image().height(), mp_video_input->get_left_image().width(), CV_8UC3);
         cv::remap(diffPolar, diffRect, inverseX, inverseY, cv::INTER_CUBIC, cv::BORDER_TRANSPARENT);
         cv::resize(diffPolar, polarOutput, cv::Size(640, 720));
-        if (mp_stixel_motion_estimator)
-            mp_stixel_motion_estimator->drawTracker(diffRect);
+//         if (mp_stixel_motion_estimator)
+//             mp_stixel_motion_estimator->drawTracker(diffRect);
         cv::imshow("polar", diffRect);
     }
     
@@ -716,31 +750,31 @@ void StixelsApplicationROS::publishStixels()
     
     
     // TODO: Get these values from somewhere
-    double deltaTime = 0.1;
-    
-    double posX = 0.0;
-    double posY = 0.0;
-    double posTheta = 0.0; 
-    m_accTime += deltaTime;
-    
-    cout << "accTime " << m_accTime << endl;
-
-    static tf::TransformBroadcaster broadcaster;
-    tf::StampedTransform transform;
-    // TODO: In a real application, time should be taken from the system
-    transform.stamp_ = ros::Time();
-    transform.setOrigin(tf::Vector3(posX, posY, m_accTime));
-    transform.setRotation( tf::createQuaternionFromRPY(0.0, 0.0, posTheta) );
-
+//     double deltaTime = 0.1;
+//     
+//     double posX = 0.0;
+//     double posY = 0.0;
+//     double posTheta = 0.0; 
+//     m_accTime += deltaTime;
+//     
+//     cout << "accTime " << m_accTime << endl;
+// 
+//     static tf::TransformBroadcaster broadcaster;
+//     tf::StampedTransform transform;
+//     // TODO: In a real application, time should be taken from the system
+//     transform.stamp_ = ros::Time();
+//     transform.setOrigin(tf::Vector3(posX, posY, m_accTime));
+//     transform.setRotation( tf::createQuaternionFromRPY(0.0, 0.0, posTheta) );
+// 
     publishPointCloud(pointCloud);
-    const tf::StampedTransform stamped = tf::StampedTransform(transform, ros::Time::now(), "/map", "/odom");
-    cout << "stamped " << stamped.stamp_ << endl;
-    broadcaster.sendTransform(stamped);
-    
-    
-    cv::imshow("imgLeft", imgLeft);
-    
-    waitForKey(&m_waitTime);
+//     const tf::StampedTransform stamped = tf::StampedTransform(transform, ros::Time::now(), "/map", "/odom");
+//     cout << "stamped " << stamped.stamp_ << endl;
+//     broadcaster.sendTransform(stamped);
+//     
+//     
+//     cv::imshow("imgLeft", imgLeft);
+//     
+//     waitForKey(&m_waitTime);
 }
 
 void StixelsApplicationROS::publishStixelsInObjects()
@@ -758,7 +792,7 @@ void StixelsApplicationROS::publishStixelsInObjects()
             
             BOOST_FOREACH(Stixel stixel, obstacle.stixels) {
                 
-                stixel.disparity = obstacle.disparity;
+//                 stixel.disparity = obstacle.disparity;
                 
                 cv::Point2i p1(stixel.x, stixel.bottom_y);
                 cv::Point2i p2(stixel.x, stixel.top_y);
@@ -794,26 +828,173 @@ void StixelsApplicationROS::publishStixelsInObjects()
     }
     
     // TODO: Get these values from somewhere
-    double deltaTime = 0.1;
-    
-    double posX = 0.0;
-    double posY = 0.0;
-    double posTheta = 0.0; 
-    m_accTime += deltaTime;
-    
-    cout << "accTime " << m_accTime << endl;
-    
-    static tf::TransformBroadcaster broadcaster;
-    tf::StampedTransform transform;
-    // TODO: In a real application, time should be taken from the system
-    transform.stamp_ = ros::Time();
-    transform.setOrigin(tf::Vector3(posX, posY, m_accTime));
-    transform.setRotation( tf::createQuaternionFromRPY(0.0, 0.0, posTheta) );
-    
+//     double deltaTime = 0.1;
+//     
+//     double posX = 0.0;
+//     double posY = 0.0;
+//     double posTheta = 0.0; 
+//     m_accTime += deltaTime;
+//     
+//     cout << "accTime " << m_accTime << endl;
+//     
+//     static tf::TransformBroadcaster broadcaster;
+//     tf::StampedTransform transform;
+//     // TODO: In a real application, time should be taken from the system
+//     transform.stamp_ = ros::Time();
+//     transform.setOrigin(tf::Vector3(posX, posY, m_accTime));
+//     transform.setRotation( tf::createQuaternionFromRPY(0.0, 0.0, posTheta) );
+//     
     publishPointCloud(pointCloud);
-    const tf::StampedTransform stamped = tf::StampedTransform(transform, ros::Time::now(), "/map", "/odom");
-    cout << "stamped " << stamped.stamp_ << endl;
-    broadcaster.sendTransform(stamped);
+//     const tf::StampedTransform stamped = tf::StampedTransform(transform, ros::Time::now(), "/map", "/odom");
+//     cout << "stamped " << stamped.stamp_ << endl;
+//     broadcaster.sendTransform(stamped);
+}
+
+void StixelsApplicationROS::publishROS()
+{
+    const double deltaTime = 1.0/15.0;
+    m_accTime += deltaTime;
+
+    rosgraph_msgs::Clock clockMsg;
+    clockMsg.clock = ros::Time(m_accTime);
+    m_clockPub.publish(clockMsg);
+    
+//     publishStixels();
+    publishStixelsInObjects();
+    publishFakePointCloud();
+//     publishStereoPointCloud();
+    
+    sensor_msgs::Image msgLeft, msgRight;
+    cv_bridge::CvImage tmpLeft(msgLeft.header, sensor_msgs::image_encodings::BGR8, m_currLeft);
+    cv_bridge::CvImage tmpRight(msgRight.header, sensor_msgs::image_encodings::BGR8, m_currRight);
+    m_leftCameraInfo.header.stamp = tmpLeft.header.stamp = ros::Time::now();
+    m_rightCameraInfo.header.stamp = tmpRight.header.stamp = ros::Time::now();
+    
+    m_leftInfoPub.publish(m_leftCameraInfo);
+    m_righttInfoPub.publish(m_rightCameraInfo);
+    
+    m_leftImgPub.publish(tmpLeft.toImageMsg());
+    m_rightImgPub.publish(tmpRight.toImageMsg());
+    
+
+        
+    ros::spinOnce();
+}
+
+
+void StixelsApplicationROS::publishFakePointCloud()
+{
+    const double radius = 15.0;
+    
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pointCloud->reserve(4 * radius / 0.01);
+    
+    for (double x = -radius; x <= radius; x += 0.01) {
+        pcl::PointXYZ point;
+        point.x = x;
+        point.y = -radius;
+        point.z = 0.0;
+        
+        pointCloud->push_back(point);
+        
+        point.y = radius;
+        pointCloud->push_back(point);
+    }
+    
+    for (double y = -radius; y <= radius; y += 0.01) {
+        pcl::PointXYZ point;
+        point.x = -radius;
+        point.y = y;
+        point.z = 0.0;
+        
+        pointCloud->push_back(point);
+        
+        point.x = radius;
+        pointCloud->push_back(point);
+    }
+    
+    sensor_msgs::PointCloud2 cloudMsg;
+    pcl::toROSMsg (*pointCloud, cloudMsg);
+    cloudMsg.header.frame_id = CAMERA_FRAME_ID;
+    cloudMsg.header.stamp = ros::Time::now();
+    cloudMsg.header.seq = mp_video_input->get_current_frame_number();
+    
+    m_fakePointCloudPub.publish(cloudMsg);
+}
+
+void StixelsApplicationROS::publishStereoPointCloud()
+{
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pointCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pointCloud->reserve(m_currLeft.rows * m_currLeft.cols);
+    cv::Mat leftGray, rightGray;
+    cv::Mat dispELAS, scaledMapELAS, colorMapELAS, maskELAS;
+    cv::cvtColor(m_currRight, leftGray, CV_BGR2GRAY);
+    cv::cvtColor(m_currLeft, rightGray, CV_BGR2GRAY);
+    
+    Elas elas(Elas::parameters(Elas::ROBOTICS));
+    
+    const doppia::MetricStereoCamera& camera = mp_video_input->get_metric_camera();
+    const double & camera_height = mp_video_input->camera_height;
+    
+    dispELAS = cv::Mat(m_currLeft.rows, m_currLeft.cols, CV_64F);
+    
+    int32_t dims[3];
+    dims[0] = leftGray.cols;
+    dims[1] = leftGray.rows;
+    dims[2] = leftGray.cols;
+    
+    float * D1 = new float[leftGray.cols * leftGray.rows];
+    float * D2 = new float[rightGray.cols * rightGray.rows];
+    
+    elas.process((uint8_t *)leftGray.data, (uint8_t *)rightGray.data, D1, D2, dims);
+    
+    for (uint32_t y = 0; y < leftGray.rows; y++) {
+        for (uint32_t x = 0; x < leftGray.cols; x++) {
+            dispELAS.at<double>(y, x) = D1[y * leftGray.cols + x];
+            
+            Eigen::Vector2f point2d;
+            point2d << y, x;
+            const Eigen::Vector3f & point3d = camera.get_left_camera().back_project_2d_point_to_3d(point2d, D1[y * leftGray.cols + x] / 5.0);
+            
+            cv::Vec3b pixel = m_currRight.at<cv::Vec3b>(y, x);
+            
+            pcl::PointXYZRGB point;
+            point.z = camera_height - point3d(0);
+            point.y = point3d(2);
+            point.x = point3d(1);
+            point.r = pixel[2];
+            point.g = pixel[1];
+            point.b = pixel[0];
+            pointCloud->push_back(point);
+        }
+    }
+    
+    delete D1;
+    delete D2;
+    
+    sensor_msgs::PointCloud2 cloudMsg;
+    pcl::toROSMsg (*pointCloud, cloudMsg);
+    cloudMsg.header.frame_id = CAMERA_FRAME_ID;
+    cloudMsg.header.stamp = ros::Time();
+    
+    m_stereoPointCloudPub.publish(cloudMsg);
+    
+    ros::spinOnce();
+
+//     const cv::Mat & map, cv::Mat & falseColorsMap, cv::Mat & scaledMap
+//     dispELAS, colorMapELAS, scaledMapELAS
+    double min;
+    double max;
+    cv::minMaxIdx(dispELAS, &min, &max);
+    max = 64;
+    min = 0;
+    // expand your range to 0..255. Similar to histEq();
+    dispELAS.convertTo(scaledMapELAS, CV_8UC1, 255 / (max-min), min); 
+    
+    applyColorMap(dispELAS, colorMapELAS, cv::COLORMAP_JET);    
+    
+    cv::imshow("colorMapELAS", colorMapELAS);
+    cv::waitKey(20);
 }
 
 }

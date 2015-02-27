@@ -76,6 +76,8 @@ StixelsTracker::StixelsTracker::StixelsTracker(const boost::program_options::var
     
     m_minPolarSADForBeingStatic = 10;
     
+    m_frameIdx = 0;
+    
 //     mp_denseTracker.reset(new dense_tracker::DenseTracker());
 }
 
@@ -1294,14 +1296,14 @@ void StixelsTracker::drawTracker(cv::Mat& img, cv::Mat & imgTop)
     gil2opencv(current_image_view, img);
     imgTop = cv::Mat::zeros(img.rows, img.cols, CV_8UC3);
     
-    cv::rectangle(img, cv::Point2d(0, 0), cv::Point2d(img.cols - 1, 20), cv::Scalar::all(0), -1);
-    
-    stringstream oss;
-    oss << "SAD = " << m_sad_factor << ", Height = " << m_height_factor << 
-           ", Polar distance = " << m_polar_dist_factor << ", Polar SAD = " << m_polar_sad_factor <<
-           ", Dense Tracking = " << m_dense_tracking_factor;
-    cv::putText(img, oss.str(), cv::Point2d(5, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(255));
-    cv::putText(imgTop, oss.str(), cv::Point2d(2, 7), cv::FONT_HERSHEY_SIMPLEX, 0.25, cv::Scalar::all(255));
+//     cv::rectangle(img, cv::Point2d(0, 0), cv::Point2d(img.cols - 1, 20), cv::Scalar::all(0), -1);
+//     
+//     stringstream oss;
+//     oss << "SAD = " << m_sad_factor << ", Height = " << m_height_factor << 
+//            ", Polar distance = " << m_polar_dist_factor << ", Polar SAD = " << m_polar_sad_factor <<
+//            ", Dense Tracking = " << m_dense_tracking_factor;
+//     cv::putText(img, oss.str(), cv::Point2d(5, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(255));
+//     cv::putText(imgTop, oss.str(), cv::Point2d(2, 7), cv::FONT_HERSHEY_SIMPLEX, 0.25, cv::Scalar::all(255));
     
     if (0) {
         uint32_t clusterIdx = 0;
@@ -1533,7 +1535,21 @@ void StixelsTracker::computeObstacles() {
     
     vector <int> discontPrev, discontCurr;
     
-    for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
+//     for (uint32_t i = 1; i < current_stixels_p->size(); i++) {
+    for (uint32_t i = 1; i < 620; i++) {
+//         if (m_useCostMatrix && (stixels_motion[i] == -1))
+//             continue;
+//         
+//         if (m_useCostMatrix && (i < current_stixels_p->size() - 1) && (stixels_motion[i + 1] == -1)) {
+//             discontCurr.push_back(i);
+//             continue;
+//         }
+//         
+//         if (m_useCostMatrix && (stixels_motion[i - 1] == -1)) {
+//             discontCurr.push_back(i);
+//             continue;
+//         }
+        
         if (previous_stixels_p->at(i).bottom_y != previous_stixels_p->at(i - 1).bottom_y) {
             discontPrev.push_back(i);
         }
@@ -1560,17 +1576,27 @@ void StixelsTracker::computeObstacles() {
         
         
         if (fabs(stixel3dR.bottom3d.z - stixel3dL.bottom3d.z) > maxDepthDistInObstacle) {
+            
             getObstacleFromStixelsList(*current_stixels_p, stixelL.x, stixelR.x, currObstacle);
+            
+//             uint32_t countInvalid = 0;
+//             for (uint32_t j = stixelIdxL; j <= stixelIdxR; j++) {
+//                 if (stixels_motion[j] == -1)
+//                     countInvalid++;
+//             }
             
             // TODO: Use 3d width and height to filter
             if ((currObstacle.roi.width > max2DWidthToAcceptObstacle) &&
-                (currObstacle.roi.height > max2DHeightToAcceptObstacle)) {
+                (currObstacle.roi.height > max2DHeightToAcceptObstacle)){
+//                 &&
+//                 ((double)countInvalid / (stixelIdxR - stixelIdxL) < 0.75)) {
                 
                 BOOST_FOREACH(const Stixel3d & stixel, currObstacle.stixels) {
                     m_currObstacleCorresp[stixel.getBottom2d<cv::Point2i>().x] = m_obstacles.size();
                 }
                 m_obstacles.push_back(currObstacle); 
             }
+            
             
             stixelL = stixelR;
             stixel3dL = stixel3dR;
@@ -1786,29 +1812,31 @@ double StixelsTracker::getNcc(const cv::Mat& img1, const cv::Mat& img2,
 
 void StixelsTracker::updateTrackerFromObstacles()
 {
-    stixels_motion.clear();
-    stixels_motion.resize(current_stixels_p->size(), -1);
-    BOOST_FOREACH(const t_obstaclesTrack & obstacleTrack, m_obstaclesTracker) {
-        const t_track & currTrack = obstacleTrack.track;
-        const int32_t & minIdxCurr = currTrack [0].roi.x;
-        const int32_t & maxIdxCurr = currTrack [0].roi.x + currTrack[0].roi.width;
-        
-        if (currTrack.size() > 1) {
-            const t_track & prevTrack = obstacleTrack.track;
-            const int32_t & minIdxPrev = prevTrack [1].roi.x;
-            const int32_t & maxIdxPrev = prevTrack [1].roi.x + prevTrack[1].roi.width;
+//     if (! m_useCostMatrix) {
+        stixels_motion.clear();
+        stixels_motion.resize(current_stixels_p->size(), -1);
+        BOOST_FOREACH(const t_obstaclesTrack & obstacleTrack, m_obstaclesTracker) {
+            const t_track & currTrack = obstacleTrack.track;
+            const int32_t & minIdxCurr = currTrack [0].roi.x;
+            const int32_t & maxIdxCurr = currTrack [0].roi.x + currTrack[0].roi.width;
             
-            const double proportionalFactor = (double)(maxIdxPrev - minIdxPrev) / (maxIdxCurr - minIdxCurr);
-            
-            for (int32_t idxCurr = minIdxCurr; idxCurr < maxIdxCurr; idxCurr++) {
-                stixels_motion[idxCurr] = (idxCurr - minIdxCurr) * proportionalFactor + minIdxPrev;
-            }
-        } else {
-            for (int32_t idxCurr = minIdxCurr; idxCurr < maxIdxCurr; idxCurr++) {
-                stixels_motion[idxCurr] = -1;
+            if (currTrack.size() > 1) {
+                const t_track & prevTrack = obstacleTrack.track;
+                const int32_t & minIdxPrev = prevTrack [1].roi.x;
+                const int32_t & maxIdxPrev = prevTrack [1].roi.x + prevTrack[1].roi.width;
+                
+                const double proportionalFactor = (double)(maxIdxPrev - minIdxPrev) / (maxIdxCurr - minIdxCurr);
+                
+                for (int32_t idxCurr = minIdxCurr; idxCurr < maxIdxCurr; idxCurr++) {
+                    stixels_motion[idxCurr] = (idxCurr - minIdxCurr) * proportionalFactor + minIdxPrev;
+                }
+            } else {
+                for (int32_t idxCurr = minIdxCurr; idxCurr < maxIdxCurr; idxCurr++) {
+                    stixels_motion[idxCurr] = -1;
+                }
             }
         }
-    }
+//     }
     
 //     int minIdxCurr = -1;
 //     for (uint32_t i = 0; i <= stixels_motion.size(); i++) {
@@ -1984,7 +2012,7 @@ void StixelsTracker::trackObstacles()
             obstacleTrack = prevObstaclesTracker[prevIdx];
         }
         obstacleTrack.track.push_front(m_obstacles[i]);
-        obstacleTrack.validCount += m_obstacles[i].valid? 1 : -1;
+        obstacleTrack.validCount = m_obstacles[i].valid? 1 : -1;
         
         m_obstaclesTracker.push_back(obstacleTrack);
     }
@@ -1992,7 +2020,7 @@ void StixelsTracker::trackObstacles()
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // VISUALIZATION
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-//     return;
+    return;
     cv::Mat img = cv::Mat::zeros(m_currImg.rows * 2, m_currImg.cols * 2, CV_8UC3);
     cv::Rect roi(0, 0, m_currImg.cols, m_currImg.rows);
     cv::Mat roiImgPrev = img(roi);
@@ -2014,7 +2042,7 @@ void StixelsTracker::trackObstacles()
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         cv::rectangle(roiImgCurr, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
                       cv::Point2i(m_obstacles[i].roi.x + m_obstacles[i].roi.width, m_obstacles[i].roi.y + m_obstacles[i].roi.height),
-                      color, 3);
+                      color, 2);
         
         cv::rectangle(roiImgCurr, cv::Point2i(m_obstacles[i].roi.x, m_obstacles[i].roi.y),
                       cv::Point2i(m_obstacles[i].roi.x + 40, m_obstacles[i].roi.y - 10), cv::Scalar::all(255), -1);
@@ -2035,7 +2063,7 @@ void StixelsTracker::trackObstacles()
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         cv::rectangle(roiImgPrev, cv::Point2i(prevObstacles[i].roi.x, prevObstacles[i].roi.y),
                   cv::Point2i(prevObstacles[i].roi.x + prevObstacles[i].roi.width, prevObstacles[i].roi.y + prevObstacles[i].roi.height),
-                  color, 1);
+                  color, 2);
         cv::rectangle(roiImgPrev, cv::Point2i(prevObstacles[i].roi.x, prevObstacles[i].roi.y),
                       cv::Point2i(prevObstacles[i].roi.x + 20, prevObstacles[i].roi.y - 10), cv::Scalar::all(255), -1);
         stringstream oss;
@@ -2047,7 +2075,8 @@ void StixelsTracker::trackObstacles()
         cv::Scalar color(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
         
         const t_track & track = obstaclesTrack.track;
-        if (obstaclesTrack.validCount >= 0) {
+//         if (obstaclesTrack.validCount >= 0) {
+        if (track[0].valid) {
             double speed = 0.0;
             for (uint32_t i = 1; i < track.size(); i++) {
                 cv::line(roiImgTrack, cv::Point2i(track[i].roi.x, track[i].roi.y), 
@@ -2072,14 +2101,15 @@ void StixelsTracker::trackObstacles()
                         color, 2);
                 
                 t_obstacle lastObstacle = track[track.size() - 1];
-                cv::rectangle(roiImgTrack, cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y),
-                            cv::Point2i(lastObstacle.roi.x + 20, lastObstacle.roi.y - 10), cv::Scalar::all(255), -1);
-                stringstream oss;
-                oss << speed;
-                cv::putText(roiImgTrack, oss.str(), cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
+//                 cv::rectangle(roiImgTrack, cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y),
+//                             cv::Point2i(lastObstacle.roi.x + 20, lastObstacle.roi.y - 10), cv::Scalar::all(255), -1);
+//                 stringstream oss;
+//                 oss << speed;
+//                 cv::putText(roiImgTrack, oss.str(), cv::Point2i(lastObstacle.roi.x, lastObstacle.roi.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar::all(0));
             }
         }
     }
+    cv::imshow("roiImgTrack", roiImgTrack);
     
     // Polar calibration visualization
     if (mp_polarCalibration) {

@@ -39,6 +39,10 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include "std_msgs/String.h"
+#include <image_transport/image_transport.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <camera_calibration_parsers/parse_yml.h>
+#include <rosgraph_msgs/Clock.h>
 
 #include <boost/thread/thread.hpp>
 
@@ -65,7 +69,10 @@ private:
     bool rectifyPolar();
     void transformStixels();
     
+    void publishROS();
+    void publishFakePointCloud();
     void publishPointCloud(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr & pointCloud);
+    void publishStereoPointCloud();
     
     boost::shared_ptr<doppia::AbstractVideoInput> mp_video_input;
     boost::shared_ptr<doppia::AbstractStixelWorldEstimator> mp_stixel_world_estimator;
@@ -98,8 +105,6 @@ private:
     
     bool m_doPolarCalib;
     
-    ros::Publisher m_pointCloudPub;
-    tf::TransformBroadcaster m_map2odomTfBroadcaster;
     double m_accTime;
     
     bool m_firstIteration;
@@ -107,6 +112,19 @@ private:
     uint32_t m_frameBufferLength;
     
     int m_increment;
+    
+    // ROS Publishers/suscribers
+    ros::Publisher m_clockPub;
+    ros::Publisher m_pointCloudPub;
+    ros::Publisher m_fakePointCloudPub;
+    ros::Publisher m_stereoPointCloudPub;
+    
+    image_transport::Publisher m_leftImgPub;
+    image_transport::Publisher m_rightImgPub;
+    
+    ros::Publisher m_leftInfoPub;
+    ros::Publisher m_righttInfoPub;
+    sensor_msgs::CameraInfo m_leftCameraInfo, m_rightCameraInfo;
     
 // protected:
 //     void waitForKey(&m_waitTime arg1);
