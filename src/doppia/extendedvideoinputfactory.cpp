@@ -27,7 +27,7 @@
 #include <boost/program_options/options_description.hpp>
 
 #include "helpers/get_option_value.hpp"
-#include "helpers/get_section_options.hpp"
+// #include "helpers/get_section_options.hpp"
 
     
 namespace doppia
@@ -64,14 +64,15 @@ ExtendedVideoInputFactory::get_args_options()
     return desc;
 }
 
-shared_ptr<AbstractPreprocessor> new_preprocessor_instance(const variables_map &options, AbstractVideoInput &video_input)
-{
-    shared_ptr<AbstractPreprocessor> preprocess_p;
-    preprocess_p.reset(new CpuPreprocessor(video_input.get_left_image().dimensions(),
-                                            video_input.get_stereo_calibration(),
-                                            options));
-    return preprocess_p;
-}
+extern shared_ptr<AbstractPreprocessor> new_preprocessor_instance(const variables_map &options, AbstractVideoInput &video_input);
+// shared_ptr<AbstractPreprocessor> new_preprocessor_instance(const variables_map &options, AbstractVideoInput &video_input)
+// {
+//     shared_ptr<AbstractPreprocessor> preprocess_p;
+//     preprocess_p.reset(new CpuPreprocessor(video_input.get_left_image().dimensions(),
+//                                             video_input.get_stereo_calibration(),
+//                                             options));
+//     return preprocess_p;
+// }
 
 AbstractVideoInput*
 ExtendedVideoInputFactory::new_instance(const variables_map &options)

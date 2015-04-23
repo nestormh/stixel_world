@@ -22,7 +22,6 @@
 
 #include "stereo_matching/stixels/StixelWorldEstimator.hpp"
 #include "stereo_matching/stixels/FastStixelWorldEstimator.hpp"
-#include "stereo_matching/stixels/FastMultilayerStixelWorldEstimator.hpp"
 
 #include "stereo_matching/stixels/StixelsEstimator.hpp"
 #include "stereo_matching/stixels/StixelsEstimatorWithHeightEstimation.hpp"
@@ -55,7 +54,7 @@ ExtendedStixelWorldEstimatorFactory::get_args_options()
     options_description desc("StixelWorldEstimatorFactory options");
     
     desc.add_options()
-    ("stixel_world.method", value<string>()->default_value("multilayer"),
+    ("stixel_world.method", value<string>()->default_value("fast_uv"),
                                                            "stixels world estimation methods: multilayer, fast_uv, fast, not_fast. "
                                                            "fast_uv indicates that the stixels will be directly estimated in the image plane, "
                                                            "instead of in the disparity space (fast).")
@@ -120,7 +119,7 @@ ExtendedStixelWorldEstimatorFactory::new_instance(const boost::program_options::
     AbstractStixelWorldEstimator* stixel_world_estimator_p = NULL;
     
     if (method.empty() or (method.compare("multilayer") == 0)) {
-        stixel_world_estimator_p = new FastMultilayerStixelWorldEstimator(options,
+        stixel_world_estimator_p = new FastStixelWorldEstimator(options,
                                                                           input_dimensions,
                                                                           camera,
                                                                           ground_plane_prior);

@@ -10,7 +10,7 @@ Panels:
         - /Planner1
         - /Planner1/Trajectories1
       Splitter Ratio: 0.503797
-    Tree Height: 478
+    Tree Height: 353
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -30,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Stixels
+    SyncSource: Image
 Visualization Manager:
   Class: ""
   Displays:
@@ -59,6 +59,8 @@ Visualization Manager:
         All Enabled: true
         base_footprint:
           Value: true
+        base_left_cam:
+          Value: true
         base_link:
           Value: true
         left_cam:
@@ -77,8 +79,9 @@ Visualization Manager:
           odom:
             base_footprint:
               base_link:
-                left_cam:
-                  {}
+                base_left_cam:
+                  left_cam:
+                    {}
       Update Interval: 0
       Value: true
     - Class: rviz/Group
@@ -113,7 +116,7 @@ Visualization Manager:
           Use rainbow: true
           Value: true
         - Class: rviz/Image
-          Enabled: false
+          Enabled: true
           Image Topic: /stixel_world/stixels_world/left/image
           Max Value: 1
           Median window: 5
@@ -122,9 +125,9 @@ Visualization Manager:
           Normalize Range: true
           Queue Size: 2
           Transport Hint: raw
-          Value: false
+          Value: true
         - Class: rviz/Image
-          Enabled: false
+          Enabled: true
           Image Topic: /stixel_world/stixels_world/right/image
           Max Value: 1
           Median window: 5
@@ -133,7 +136,7 @@ Visualization Manager:
           Normalize Range: true
           Queue Size: 2
           Transport Hint: raw
-          Value: false
+          Value: true
       Enabled: true
       Name: stixel_world
     - Class: rviz/Group
@@ -159,7 +162,13 @@ Visualization Manager:
           Class: rviz/Path
           Color: 25; 255; 0
           Enabled: true
+          Line Style: Lines
+          Line Width: 0.03
           Name: GlobalPlan
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
           Topic: /stixel_world/move_base/TrajectoryPlannerROS/global_plan
           Value: true
         - Alpha: 1
@@ -229,6 +238,17 @@ Visualization Manager:
           Value: false
       Enabled: true
       Name: Planner
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /verdino/stereo_and_odom/left/image_rect_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -253,20 +273,30 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 28.8642
+      Distance: 33.0996
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
       Focal Point:
-        X: 0.117231
-        Y: 23.6604
-        Z: -6.01689
+        X: 2.4782
+        Y: 23.9294
+        Z: -4.01837
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.289797
+      Pitch: 0.174797
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.69857
+      Yaw: 4.62357
     Saved:
       - Class: rviz/Orbit
         Distance: 6.32242
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.06
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
         Focal Point:
           X: -0.615302
           Y: 1.56164
@@ -279,6 +309,11 @@ Visualization Manager:
         Yaw: 4.60357
       - Class: rviz/Orbit
         Distance: 4.36714
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.06
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
         Focal Point:
           X: 0.515197
           Y: 1.75124
@@ -291,6 +326,11 @@ Visualization Manager:
         Yaw: 4.67357
       - Class: rviz/Orbit
         Distance: 28.5257
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.06
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
         Focal Point:
           X: -0.21283
           Y: 24.1122
@@ -303,6 +343,11 @@ Visualization Manager:
         Yaw: 4.72357
       - Class: rviz/Orbit
         Distance: 28.8642
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.06
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
         Focal Point:
           X: 0.117231
           Y: 23.6604
@@ -316,12 +361,14 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 977
+  Height: 975
   Hide Left Dock: false
   Hide Right Dock: false
+  Image:
+    collapsed: false
   LeftImg:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000017f00000269fc0200000007fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006901000005fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073000000010a00000269000000d801000005fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f00000340fc0200000004fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000010a000000720000006901000005fb0000000a00560069006500770073000000003300000340000000ab01000005fb0000001e0054006f006f006c002000500072006f007000650072007400690065007301000002d0000000a30000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000500000000d4fc0100000005fb00000010005200690067006800740049006d00670000000000000002b30000006a01000005fb0000000e004c0065006600740049006d00670000000000000005000000006301000005fb0000000a00560069006500770073030000004e00000080000002e100000197fb00000010005200690067006800740049006d00670100000000000002930000000000000000fb0000000e004c0065006600740049006d006701000002960000026a000000000000000000000003000005000000003efc0100000002fb0000000800540069006d00650100000000000005000000027901000005fb0000000800540069006d00650100000000000004500000000000000000000005000000034000000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000017f000001ecfc0200000007fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006901000005fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000185000001ec000000d801000005fb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f00000340fc0200000004fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000010a000000720000006901000005fb0000000a00560069006500770073000000003300000340000000ab01000005fb0000001e0054006f006f006c002000500072006f007000650072007400690065007301000002d0000000a30000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b2000000000000000000000002000005000000014ffc0100000007fb0000000a0049006d0061006700650100000000000005000000005a01000005fb00000010005200690067006800740049006d00670000000000000002b30000006c01000005fb0000000e004c0065006600740049006d00670000000000000005000000006501000005fb0000000a00560069006500770073030000004e00000080000002e100000197fb00000010005200690067006800740049006d00670100000000000002930000000000000000fb0000000e004c0065006600740049006d006701000002960000026a0000000000000000fb0000000e0049006d00610067006500470054010000000000000500000000000000000000000003000005000000003efc0100000002fb0000000800540069006d00650100000000000005000000027801000005fb0000000800540069006d006501000000000000045000000000000000000000037e000001ec00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   RightImg:
     collapsed: false
   Selection:

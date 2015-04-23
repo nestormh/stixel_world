@@ -63,7 +63,6 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     
     mp_stixel_world_estimator.reset(StixelWorldEstimatorFactory::new_instance(m_options, *mp_video_input));
     mp_prevStixels.reset(new stixels_t);
-    mp_stixel_motion_evaluator.reset(new MotionEvaluation(m_options));
     
     m_doPolarCalib = false;
     
@@ -83,6 +82,10 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     nh.param("polarSADFactor", m_polarSADFactor, 0.0);
     nh.param("histBatFactor", m_histBatFactor, 0.0);
     
+    nh.param("compute_motion", m_computeMotion, false);
+
+    nh.param("input_from_topic", m_inputFromTopic, true);
+    
     nh.param("increment", m_increment, 1);
     
     if (twoLevelsTracking) {
@@ -93,6 +96,7 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     if ((m_useObjects) || (m_polarDistFactor != 0.0) || (m_polarSADFactor != 0.0)) {
         m_doPolarCalib = true;
     }
+    
     
 //     m_doPolarCalib = true;
     
@@ -157,26 +161,29 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
 //     mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixels_tests[5]);
 // end of NOTE
     
-    if (mp_stixels_tests.size() == 0) {
-//         m_doPolarCalib = true;
-        if (m_doPolarCalib)
-            mp_polarCalibration.reset(new PolarCalibration());
-        mp_stixel_motion_estimator.reset( 
-        new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
-                            mp_stixel_world_estimator->get_stixel_width(),
-                            mp_polarCalibration) );
-        
-//         mp_stixel_motion_estimator->set_motion_cost_factors(0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f, true);
-        mp_stixel_motion_estimator->set_motion_cost_factors(m_SADFactor, m_heightFactor, m_polarDistFactor, 
-                                                            m_polarSADFactor, 0.0f, m_histBatFactor, 
-                                                            m_useGraph, m_useCostMatrix, m_useObjects,
-                                                            twoLevelsTracking);
-        mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
-//         mp_stixel_oflow_motion_estimator.reset(new oFlowTracker());
-        
-    } else {
-        mp_stixel_motion_estimator = mp_stixels_tests[0];
+    if (m_computeMotion) {
+        if (mp_stixels_tests.size() == 0) {
+    //         m_doPolarCalib = true;
+            if (m_doPolarCalib)
+                mp_polarCalibration.reset(new PolarCalibration());
+            mp_stixel_motion_estimator.reset( 
+            new StixelsTracker( m_options, mp_video_input->get_metric_camera(), 
+                                mp_stixel_world_estimator->get_stixel_width(),
+                                mp_polarCalibration) );
+            
+    //         mp_stixel_motion_estimator->set_motion_cost_factors(0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f, true);
+            mp_stixel_motion_estimator->set_motion_cost_factors(m_SADFactor, m_heightFactor, m_polarDistFactor, 
+                                                                m_polarSADFactor, 0.0f, m_histBatFactor, 
+                                                                m_useGraph, m_useCostMatrix, m_useObjects,
+                                                                twoLevelsTracking);
+            mp_stixel_motion_evaluator->addStixelMotionEstimator(mp_stixel_world_estimator, mp_stixel_motion_estimator);
+    //         mp_stixel_oflow_motion_estimator.reset(new oFlowTracker());
+        } else {
+            mp_stixel_motion_estimator = mp_stixels_tests[0];
+        }
+        mp_stixel_motion_evaluator.reset(new MotionEvaluation(m_options));
     }
+    
     
     m_waitTime = 0;
     
@@ -184,6 +191,7 @@ StixelsApplicationROS::StixelsApplicationROS(const string& optionsFile)
     
     m_firstIteration = true;
         
+    
     return;
 }
 
@@ -278,16 +286,28 @@ void StixelsApplicationROS::runStixelsApplication()
     m_prevRightRectified = doppia::AbstractVideoInput::input_image_t(mp_video_input->get_right_image().dimensions());
     
     double startWallTime = omp_get_wtime();
+    
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     while (iterate()) {
-        visualize();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
+        if (! m_inputFromTopic)
+            visualize();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         publishROS();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
 //         publishStixels();
-        publishStixelsInObjects();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
+        if (m_computeMotion)
+            publishStixelsInObjects();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         update();
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
         startWallTime = omp_get_wtime();
         cout << "********************************" << endl;
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
     }
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
 }
 
 void StixelsApplicationROS::update()
@@ -347,19 +367,18 @@ bool StixelsApplicationROS::iterate()
     doppia::AbstractVideoInput::input_image_view_t
                         left_view(mp_video_input->get_left_image()),
                         right_view(mp_video_input->get_right_image());  
-                        
+
     gil2opencv(mp_video_input->get_left_image(), m_currLeft);
     gil2opencv(mp_video_input->get_right_image(), m_currRight);
     mp_stixel_world_estimator->set_rectified_images_pair(left_view, right_view);
     mp_stixel_world_estimator->compute();
     
-    if (! rectifyPolar()) {
-//         TODO: Do something in this case
-        return true;
-    }
-
     // TODO: Use again when speed information is needed
     if (mp_stixel_motion_estimator) {
+        if (! rectifyPolar()) {
+    //         TODO: Do something in this case
+            return true;
+        }
         mp_stixel_motion_estimator->set_new_rectified_image(left_view);
         mp_stixel_motion_estimator->updateDenseTracker(m_currLeft);
         mp_stixel_motion_estimator->set_estimated_stixels(mp_stixel_world_estimator->get_stixels());
@@ -384,12 +403,14 @@ bool StixelsApplicationROS::iterate()
 //             mp_stixels_tests[i]->compute();
 //     }
     
+    if (mp_stixel_motion_evaluator) {
 //     if (! m_useObjects)
         mp_stixel_motion_evaluator->evaluatePerFrame(mp_video_input->get_current_frame_number() - m_frameBufferLength - 1, m_increment); 
 //     else
 //         mp_stixel_motion_evaluator->evaluatePerFrameWithObstacles(mp_video_input->get_current_frame_number() - 1);
 //     mp_stixel_motion_evaluator->evaluateDisparity(left_view, right_view,
 //                                                   mp_video_input->get_current_frame_number() - 1);
+    }
     
     cout << "Time for " << __FUNCTION__ << ": " << omp_get_wtime() - startWallTime << endl;
     
@@ -705,24 +726,33 @@ void StixelsApplicationROS::publishPointCloud(const pcl::PointCloud<pcl::PointXY
 
 void StixelsApplicationROS::publishStixels()
 {
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     cv::Mat imgLeft;
     gil2opencv(stixel_world::input_image_const_view_t(mp_video_input->get_left_image()), imgLeft);
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     
     const stixels_t & stixels = mp_stixel_world_estimator->get_stixels();
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
 //     const stixels3d_t & stixels = mp_stixel_motion_estimator->getLastStixelsAfterTracking();
     
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr pointCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     for (stixels_t::const_iterator it = stixels.begin(); it != stixels.end(); it++) {
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         cv::Point2i p1(it->x, it->bottom_y);
         cv::Point2i p2(it->x, it->top_y);
 
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         const doppia::MetricStereoCamera& camera = mp_video_input->get_metric_camera();
         const double & camera_height = mp_video_input->camera_height;
         
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         double depth = std::numeric_limits<double>::max();
         if (it->disparity > 0.0f)
             depth = camera.disparity_to_depth(it->disparity );
             
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
         for (uint32_t y = it->top_y; y <= it->bottom_y; y++) {
             
             Eigen::Vector2f point2d;
@@ -743,10 +773,13 @@ void StixelsApplicationROS::publishStixels()
             pointCloud->push_back(point);
         }
         
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
 //         cv::line(imgLeft, p1, p2, cv::Scalar(0, 255, 0));
         imgLeft.at<cv::Vec3b>(p1.y, p1.x) = cv::Vec3b(0, 255, 0);
         imgLeft.at<cv::Vec3b>(p2.y, p2.x) = cv::Vec3b(0, 255, 0);
+        cout << __FUNCTION__ << ":" << __LINE__ << endl;
     }
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
     
     
     // TODO: Get these values from somewhere
@@ -767,6 +800,7 @@ void StixelsApplicationROS::publishStixels()
 //     transform.setRotation( tf::createQuaternionFromRPY(0.0, 0.0, posTheta) );
 // 
     publishPointCloud(pointCloud);
+    cout << __FUNCTION__ << ":" << __LINE__ << endl;
 //     const tf::StampedTransform stamped = tf::StampedTransform(transform, ros::Time::now(), "/map", "/odom");
 //     cout << "stamped " << stamped.stamp_ << endl;
 //     broadcaster.sendTransform(stamped);
@@ -859,9 +893,12 @@ void StixelsApplicationROS::publishROS()
     clockMsg.clock = ros::Time(m_accTime);
     m_clockPub.publish(clockMsg);
     
-//     publishStixels();
-    publishStixelsInObjects();
-    publishFakePointCloud();
+    if (! m_computeMotion) {
+        publishStixels();
+    } else {
+        publishStixelsInObjects();
+        publishFakePointCloud();
+    }
 //     publishStereoPointCloud();
     
     sensor_msgs::Image msgLeft, msgRight;

@@ -26,7 +26,7 @@ set(STIXEL_WORLD_SRC
     ${STIXEL_WORLD_PATH}/src/stixelstracker.cpp 
     ${STIXEL_WORLD_PATH}/src/fundamentalmatrixestimator.cpp 
     ${STIXEL_WORLD_PATH}/src/utils.cpp
-    ${STIXEL_WORLD_PATH}/src/stixelsapplication.cpp 
+#     ${STIXEL_WORLD_PATH}/src/stixelsapplication.cpp 
 #     ${STIXEL_WORLD_PATH}/src/doppia/groundestimator.cpp 
     ${STIXEL_WORLD_PATH}/src/rectification.cpp
     ${STIXEL_WORLD_PATH}/src/doppia/extendedfaststixelworldestimator.cpp 

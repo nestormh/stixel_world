@@ -105,6 +105,9 @@ private:
     
     bool m_doPolarCalib;
     
+    bool m_computeMotion;
+    bool m_inputFromTopic;
+    
     double m_accTime;
     
     bool m_firstIteration;

@@ -36,7 +36,7 @@ include_directories(stixels_world_node
     ${OpenCV_INCLUDE_DIR}
     ${Boost_INCLUDE_DIR}
     ${STIXEL_WORLD_INCLUDE_DIRS}
-    /opt/ros/hydro/include
+    /opt/ros/indigo/include
 )
 
 target_link_libraries(stixels_world_node

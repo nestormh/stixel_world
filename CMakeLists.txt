@@ -25,12 +25,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -unroll-loops -march=native 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -ffast-math -march=native -std=c++0x")
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
+
+
 # find_package(OMPL    REQUIRED )
 # find_package(Boost REQUIRED)
 # set(Boost_USE_STATIC_LIBS OFF) 
 # set(Boost_USE_MULTITHREADED ON)  
 # set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.49.0 COMPONENTS filesystem system)
+find_package(Boost 1.50.0 COMPONENTS filesystem system program_options)
 # find_package(Boost 1.49.0)
 find_package(CUDA 5.0 REQUIRED)
 find_package( Eigen3    REQUIRED )
@@ -47,6 +49,12 @@ find_package(OpenCV  REQUIRED )
 # find_package(GMP REQUIRED)
 # find_package(MPFR REQUIRED)
 # find_package(octomap REQUIRED)
+
+add_definitions( -DBOOST_ALL_DYN_LINK )
+
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
 
 INCLUDE("${POLAR_CALIBRATION_PATH}/PolarCalibration.cmake")
 INCLUDE("${STIXEL_WORLD_PATH}/StixelWorld.cmake")
